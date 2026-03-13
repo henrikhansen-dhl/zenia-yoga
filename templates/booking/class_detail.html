@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ yoga_class.title }} | Zenia Yoga{% endblock %}
+
+{% block content %}
+<section class="detail-grid">
+    <article class="detail-card">
+        <p class="eyebrow">Class details</p>
+        <h1>{{ yoga_class.title }}</h1>
+        <p class="hero-text">{{ yoga_class.short_description }}</p>
+
+        {% if yoga_class.cover_image %}
+            <img class="detail-image" src="{{ yoga_class.cover_image.url }}" alt="{{ yoga_class.title }}">
+        {% endif %}
+
+        <div class="detail-stack">
+            <div class="detail-item">
+                <span class="detail-label">Instructor</span>
+                <strong>{{ yoga_class.instructor_name }}</strong>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Schedule</span>
+                <strong>{{ yoga_class.start_time|date:'l d M Y, H:i' }} to {{ yoga_class.end_time|date:'H:i' }}</strong>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Location</span>
+                <strong>{% if yoga_class.location %}{{ yoga_class.location }}{% else %}Shared during confirmation{% endif %}</strong>
+            </div>
+            <div class="detail-item">
+                <span class="detail-label">Focus</span>
+                <strong>{% if yoga_class.focus %}{{ yoga_class.focus }}{% else %}Gentle mindful flow{% endif %}</strong>
+            </div>
+        </div>
+
+        {% if yoga_class.description %}
+            <div class="story-block">
+                <p class="eyebrow">What to expect</p>
+                <p>{{ yoga_class.description|linebreaksbr }}</p>
+            </div>
+        {% endif %}
+    </article>
+
+    <aside class="booking-card">
+        <div class="booking-header">
+            <p class="eyebrow">Reserve your place</p>
+            <h2>{{ yoga_class.spots_left }} spots left</h2>
+        </div>
+
+        {% if yoga_class.is_bookable %}
+            <form method="post" class="booking-form">
+                {% csrf_token %}
+
+                {% if form.non_field_errors %}
+                    <div class="form-errors">{{ form.non_field_errors }}</div>
+                {% endif %}
+
+                {% for field in form %}
+                    <div class="form-row">
+                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        {{ field }}
+                        {% if field.errors %}
+                            <div class="field-error">{{ field.errors|join:', ' }}</div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+
+                <button class="button-primary button-full" type="submit">Confirm booking</button>
+            </form>
+        {% else %}
+            <div class="empty-state compact">
+                <h3>Booking closed</h3>
+                <p>This class is either full or has already started. Please choose another session.</p>
+                <a class="button-secondary" href="{% url 'booking:class_list' %}">Back to all classes</a>
+            </div>
+        {% endif %}
+    </aside>
+</section>
+{% endblock %}
