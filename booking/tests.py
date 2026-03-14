@@ -61,6 +61,43 @@ class BookingFlowTests(TestCase):
 		with self.assertRaises(ValidationError):
 			booking.full_clean()
 
+	def test_successful_booking_redirects_to_public_class_list(self):
+		response = self.client.post(
+			f'/classes/{self.yoga_class.pk}/',
+			data={
+				'client_name': 'Asta',
+				'client_email': 'asta@example.com',
+				'client_phone': '12345678',
+				'notes': '',
+			},
+		)
+
+		self.assertEqual(response.status_code, 302)
+		self.assertEqual(response.headers['Location'], '/')
+		self.assertTrue(
+			Booking.objects.filter(
+				yoga_class=self.yoga_class,
+				client_email='asta@example.com',
+			).exists()
+		)
+
+	def test_successful_booking_shows_prominent_confirmation_on_front_page(self):
+		response = self.client.post(
+			f'/classes/{self.yoga_class.pk}/',
+			data={
+				'client_name': 'Asta',
+				'client_email': 'asta@example.com',
+				'client_phone': '12345678',
+				'notes': '',
+			},
+			follow=True,
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'booking-success-banner')
+		self.assertContains(response, 'booking-success-title')
+		self.assertContains(response, 'booking-success-text')
+
 
 class WeeklyRecurrenceTests(TestCase):
 	def test_recurring_class_generates_next_two_upcoming_occurrences(self):

@@ -26,9 +26,15 @@
         </header>
 
         {% if messages %}
-            <section class="messages">
+            <section class="messages public-messages">
                 {% for message in messages %}
-                    <div class="message {{ message.tags }}">{{ message }}</div>
+                    <div class="message {% if 'success' in message.tags %}booking-success-banner{% endif %} {{ message.tags }}">
+                        {% if 'success' in message.tags %}
+                            <p class="booking-success-eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Booking bekræftet{% else %}Booking confirmed{% endif %}</p>
+                            <h2 class="booking-success-title">{% if request.LANGUAGE_CODE == 'da' %}Din plads er sikret{% else %}Your place is reserved{% endif %}</h2>
+                        {% endif %}
+                        <p class="booking-success-text">{{ message }}</p>
+                    </div>
                 {% endfor %}
             </section>
         {% endif %}

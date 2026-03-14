@@ -45,7 +45,7 @@ def class_detail(request, pk):
 					if is_danish else
 					'Your place is booked. A confirmation is saved in the system.',
 				)
-				return redirect('booking:class_detail', pk=locked_class.pk)
+				return redirect('booking:class_list')
 	else:
 		form = BookingForm(yoga_class=yoga_class)
 
