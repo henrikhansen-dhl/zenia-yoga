@@ -5,15 +5,21 @@ from django.utils import timezone
 from django.utils.translation import get_language
 
 from .forms import BookingForm
-from .models import YogaClass
+from .models import Studio, YogaClass
+
+
+def _public_studio():
+	return Studio.get_default()
 
 
 def class_list(request):
 	now = timezone.now()
+	studio = _public_studio()
 	YogaClass.sync_all_weekly_occurrences(upcoming_limit=2, now=now)
 	classes = [
 		yoga_class
 		for yoga_class in YogaClass.objects.filter(
+		studio=studio,
 		is_published=True,
 		start_time__gte=now,
 		).order_by('start_time')
@@ -28,8 +34,9 @@ def class_list(request):
 
 
 def class_detail(request, pk):
+	studio = _public_studio()
 	YogaClass.sync_all_weekly_occurrences(upcoming_limit=2)
-	yoga_class = get_object_or_404(YogaClass, pk=pk, is_published=True)
+	yoga_class = get_object_or_404(YogaClass, pk=pk, is_published=True, studio=studio)
 
 	if request.method == 'POST':
 		with transaction.atomic():

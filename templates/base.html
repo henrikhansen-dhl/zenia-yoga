@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Zenia Yoga — Instructor{% endblock %}</title>
+    <title>{% block title %}Yoga Studio Platform - Admin{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -15,12 +15,28 @@
         <aside class="instr-sidebar">
             <div class="instr-brand">
                 <p class="eyebrow">Instructor</p>
-                <a class="brand" href="{% url 'instructor:dashboard' %}">Zenia Yoga</a>
+                <a class="brand" href="{% url 'instructor:dashboard' %}">Yoga Studio Platform</a>
+                {% if request.studio %}
+                <p class="client-email">{{ request.studio.name }}</p>
+                {% endif %}
             </div>
+            {% if request.available_studios|length > 1 %}
+            <form class="language-switcher language-switcher-sidebar" action="{{ request.path }}" method="get">
+                <label class="client-email" for="studio-switcher">{% if request.LANGUAGE_CODE == 'da' %}Aktivt studie{% else %}Active studio{% endif %}</label>
+                <select id="studio-switcher" name="studio" onchange="this.form.submit()">
+                    {% for available_studio in request.available_studios %}
+                    <option value="{{ available_studio.slug }}" {% if request.studio and request.studio.pk == available_studio.pk %}selected{% endif %}>{{ available_studio.name }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+            {% endif %}
             <nav class="instr-nav">
                 <a class="instr-nav-link {% block nav_dashboard %}{% endblock %}" href="{% url 'instructor:dashboard' %}">{% if request.LANGUAGE_CODE == 'da' %}Overblik{% else %}Dashboard{% endif %}</a>
                 <a class="instr-nav-link {% block nav_classes %}{% endblock %}" href="{% url 'instructor:class_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Hold{% else %}Classes{% endif %}</a>
                 <a class="instr-nav-link {% block nav_clients %}{% endblock %}" href="{% url 'instructor:client_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Deltagere{% else %}Clients{% endif %}</a>
+                {% if request.user.is_superuser %}
+                <a class="instr-nav-link {% block nav_platform %}{% endblock %}" href="{% url 'platform:studio_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Studier{% else %}Studios{% endif %}</a>
+                {% endif %}
                 <a class="instr-nav-link" href="{% url 'instructor:class_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Nyt hold{% else %}+ New class{% endif %}</a>
             </nav>
             <div class="instr-sidebar-footer">

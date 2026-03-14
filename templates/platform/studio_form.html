@@ -1,0 +1,81 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if studio %}{% if request.LANGUAGE_CODE == 'da' %}Rediger studie{% else %}Edit studio{% endif %}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Nyt studie{% else %}New studio{% endif %}{% endif %} | Yoga Studio Platform{% endblock %}
+{% block nav_platform %}active{% endblock %}
+
+{% block content %}
+<div class="instr-page-header">
+    <div>
+        <a class="back-link" href="{% url 'platform:studio_list' %}">← {% if request.LANGUAGE_CODE == 'da' %}Studier{% else %}Studios{% endif %}</a>
+        <h1>{% if studio %}{% if request.LANGUAGE_CODE == 'da' %}Rediger studie{% else %}Edit studio{% endif %}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Nyt studie{% else %}New studio{% endif %}{% endif %}</h1>
+    </div>
+</div>
+
+<div class="instr-form-wrap">
+    <form method="post" class="instr-form">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="form-errors">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <fieldset class="instr-fieldset">
+            <legend>{% if request.LANGUAGE_CODE == 'da' %}Studieoplysninger{% else %}Studio details{% endif %}</legend>
+            <div class="form-row">
+                <label for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+                {{ form.name }}
+                {% if form.name.errors %}<div class="field-error">{{ form.name.errors|join:', ' }}</div>{% endif %}
+            </div>
+            <div class="form-row">
+                <label for="{{ form.slug.id_for_label }}">{{ form.slug.label }}</label>
+                {{ form.slug }}
+                {% if form.slug.errors %}<div class="field-error">{{ form.slug.errors|join:', ' }}</div>{% endif %}
+            </div>
+            <div class="form-row">
+                <label for="{{ form.contact_name.id_for_label }}">{{ form.contact_name.label }}</label>
+                {{ form.contact_name }}
+                {% if form.contact_name.errors %}<div class="field-error">{{ form.contact_name.errors|join:', ' }}</div>{% endif %}
+            </div>
+            <div class="form-row">
+                <label for="{{ form.contact_email.id_for_label }}">{{ form.contact_email.label }}</label>
+                {{ form.contact_email }}
+                {% if form.contact_email.errors %}<div class="field-error">{{ form.contact_email.errors|join:', ' }}</div>{% endif %}
+            </div>
+            <div class="form-row">
+                <label for="{{ form.contact_phone.id_for_label }}">{{ form.contact_phone.label }}</label>
+                {{ form.contact_phone }}
+                {% if form.contact_phone.errors %}<div class="field-error">{{ form.contact_phone.errors|join:', ' }}</div>{% endif %}
+            </div>
+            <div class="form-row">
+                <label for="{{ form.billing_email.id_for_label }}">{{ form.billing_email.label }}</label>
+                {{ form.billing_email }}
+                {% if form.billing_email.errors %}<div class="field-error">{{ form.billing_email.errors|join:', ' }}</div>{% endif %}
+            </div>
+        </fieldset>
+
+        <fieldset class="instr-fieldset">
+            <legend>{% if request.LANGUAGE_CODE == 'da' %}Abonnement{% else %}Subscription{% endif %}</legend>
+            <div class="form-row">
+                <label for="{{ form.enabled_features.id_for_label }}">{{ form.enabled_features.label }}</label>
+                {{ form.enabled_features }}
+                {% if form.enabled_features.help_text %}<p class="field-help">{{ form.enabled_features.help_text }}</p>{% endif %}
+                {% if form.enabled_features.errors %}<div class="field-error">{{ form.enabled_features.errors|join:', ' }}</div>{% endif %}
+            </div>
+            <div class="form-row">
+                <label for="{{ form.subscription_notes.id_for_label }}">{{ form.subscription_notes.label }}</label>
+                {{ form.subscription_notes }}
+                {% if form.subscription_notes.errors %}<div class="field-error">{{ form.subscription_notes.errors|join:', ' }}</div>{% endif %}
+            </div>
+            <div class="form-row form-row-checkbox">
+                {{ form.is_active }}
+                <label for="{{ form.is_active.id_for_label }}">{{ form.is_active.label }}</label>
+            </div>
+        </fieldset>
+
+        <div class="instr-form-actions">
+            <button class="button-primary" type="submit">{{ action }}</button>
+            <a class="button-secondary" href="{% url 'platform:studio_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Annuller{% else %}Cancel{% endif %}</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

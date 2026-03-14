@@ -19,9 +19,14 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
+admin.site.site_header = 'Yoga Studio Platform Admin'
+admin.site.site_title = 'Yoga Studio Platform'
+admin.site.index_title = 'Platform administration'
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('i18n/', include('django.conf.urls.i18n')),
+    path('platform/', include('booking.platform_urls')),
     path('instructor/', include('booking.instructor_urls')),
     path('', include('booking.urls')),
 ]

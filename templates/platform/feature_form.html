@@ -1,0 +1,51 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if feature %}{% if request.LANGUAGE_CODE == 'da' %}Rediger funktion{% else %}Edit feature{% endif %}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Ny funktion{% else %}New feature{% endif %}{% endif %} | Yoga Studio Platform{% endblock %}
+{% block nav_platform %}active{% endblock %}
+
+{% block content %}
+<div class="instr-page-header">
+    <div>
+        <a class="back-link" href="{% url 'platform:feature_list' %}">← {% if request.LANGUAGE_CODE == 'da' %}Funktioner{% else %}Features{% endif %}</a>
+        <h1>{% if feature %}{% if request.LANGUAGE_CODE == 'da' %}Rediger funktion{% else %}Edit feature{% endif %}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Ny funktion{% else %}New feature{% endif %}{% endif %}</h1>
+    </div>
+</div>
+
+<div class="instr-form-wrap">
+    <form method="post" class="instr-form">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="form-errors">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <fieldset class="instr-fieldset">
+            <legend>{% if request.LANGUAGE_CODE == 'da' %}Funktionsoplysninger{% else %}Feature details{% endif %}</legend>
+            <div class="form-row">
+                <label for="{{ form.code.id_for_label }}">{{ form.code.label }}</label>
+                {{ form.code }}
+                {% if form.code.errors %}<div class="field-error">{{ form.code.errors|join:', ' }}</div>{% endif %}
+            </div>
+            <div class="form-row">
+                <label for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+                {{ form.name }}
+                {% if form.name.errors %}<div class="field-error">{{ form.name.errors|join:', ' }}</div>{% endif %}
+            </div>
+            <div class="form-row">
+                <label for="{{ form.description.id_for_label }}">{{ form.description.label }}</label>
+                {{ form.description }}
+                {% if form.description.errors %}<div class="field-error">{{ form.description.errors|join:', ' }}</div>{% endif %}
+            </div>
+            <div class="form-row form-row-checkbox">
+                {{ form.is_active }}
+                <label for="{{ form.is_active.id_for_label }}">{{ form.is_active.label }}</label>
+            </div>
+        </fieldset>
+
+        <div class="instr-form-actions">
+            <button class="button-primary" type="submit">{{ action }}</button>
+            <a class="button-secondary" href="{% url 'platform:feature_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Annuller{% else %}Cancel{% endif %}</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

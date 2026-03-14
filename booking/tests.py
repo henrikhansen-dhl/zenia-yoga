@@ -9,7 +9,7 @@ from django.utils import translation
 from django.utils import timezone
 
 from .forms import BookingForm, YogaClassForm
-from .models import Booking, Client, SmsReminderLog, YogaClass
+from .models import Booking, Client, Feature, SmsReminderLog, Studio, StudioFeatureAccess, StudioMembership, YogaClass
 
 
 class BookingFlowTests(TestCase):
@@ -540,7 +540,7 @@ class ClientManagementViewTests(TestCase):
 		SMS_GATEWAY_URL='https://api.cpsms.dk/v2/send',
 		SMS_GATEWAY_USERNAME='demo-user',
 		SMS_GATEWAY_API_KEY='demo-key',
-		SMS_GATEWAY_FROM='ZeniaYoga',
+		SMS_GATEWAY_FROM='YogaStudioPlatform',
 		SMS_GATEWAY_LANGUAGE='da',
 	)
 	@patch('booking.instructor_views.urllib_request.urlopen')
@@ -574,7 +574,7 @@ class ClientManagementViewTests(TestCase):
 		SMS_GATEWAY_URL='https://api.cpsms.dk/v2/send',
 		SMS_GATEWAY_USERNAME='demo-user',
 		SMS_GATEWAY_API_KEY='demo-key',
-		SMS_GATEWAY_FROM='ZeniaYoga',
+		SMS_GATEWAY_FROM='YogaStudioPlatform',
 		SMS_GATEWAY_LANGUAGE='da',
 	)
 	@patch('booking.instructor_views.urllib_request.urlopen')
@@ -594,3 +594,197 @@ class ClientManagementViewTests(TestCase):
 		log = SmsReminderLog.objects.get(client_email='lina@example.com')
 		self.assertEqual(log.status, SmsReminderLog.STATUS_FAILED)
 		self.assertEqual(log.gateway_error, 'invalid_phone')
+
+
+class StudioPlatformTests(TestCase):
+	def setUp(self):
+		self.superuser = get_user_model().objects.create_superuser(
+			username='platform-admin',
+			email='platform@example.com',
+			password='test-pass-123',
+		)
+		self.feature = Feature.objects.create(
+			code='sms-reminders',
+			name='SMS Reminders',
+			description='Send reminder messages before class.',
+		)
+
+	def test_platform_studio_list_requires_superuser(self):
+		response = self.client.get('/platform/studios/')
+		self.assertEqual(response.status_code, 302)
+
+	def test_superuser_can_create_studio_and_enable_feature(self):
+		self.client.force_login(self.superuser)
+
+		response = self.client.post('/platform/studios/new/', data={
+			'name': 'North Studio',
+			'slug': 'north-studio',
+			'contact_name': 'Ava North',
+			'contact_email': 'ava@north.example.com',
+			'contact_phone': '12345678',
+			'billing_email': 'billing@north.example.com',
+			'subscription_notes': 'Pays for SMS reminders.',
+			'is_active': 'on',
+			'enabled_features': [self.feature.pk],
+		})
+
+		self.assertEqual(response.status_code, 302)
+		studio = Studio.objects.get(slug='north-studio')
+		self.assertEqual(studio.name, 'North Studio')
+		self.assertTrue(
+			StudioFeatureAccess.objects.filter(
+				studio=studio,
+				feature=self.feature,
+				is_enabled=True,
+			).exists()
+		)
+
+	def test_superuser_can_create_studio_membership(self):
+		self.client.force_login(self.superuser)
+		studio = Studio.get_default()
+		staff_user = get_user_model().objects.create_user(
+			username='studio-staff',
+			email='staff@example.com',
+			password='test-pass-123',
+		)
+
+		response = self.client.post('/platform/access/new/', data={
+			'studio': studio.pk,
+			'user': staff_user.pk,
+			'role': StudioMembership.ROLE_MANAGER,
+			'is_active': 'on',
+		})
+
+		self.assertEqual(response.status_code, 302)
+		self.assertTrue(
+			StudioMembership.objects.filter(
+				studio=studio,
+				user=staff_user,
+				is_active=True,
+			).exists()
+		)
+
+	def test_clients_can_share_email_across_studios(self):
+		other_studio = Studio.objects.create(name='South Studio', slug='south-studio')
+		Client.objects.create(name='Lina One', email='lina@example.com')
+		Client.objects.create(name='Lina Two', email='lina@example.com', studio=other_studio)
+
+		self.assertEqual(Client.objects.filter(email='lina@example.com').count(), 2)
+
+	def test_public_class_list_only_shows_default_studio_classes(self):
+		default_studio = Studio.get_default()
+		other_studio = Studio.objects.create(name='South Studio', slug='south-studio')
+		now = timezone.now()
+
+		YogaClass.objects.create(
+			studio=default_studio,
+			title='Default Studio Flow',
+			short_description='Visible on the default site.',
+			description='Default studio class.',
+			instructor_name='Elin',
+			start_time=now + timedelta(days=1),
+			end_time=now + timedelta(days=1, hours=1),
+			capacity=10,
+			is_published=True,
+		)
+		YogaClass.objects.create(
+			studio=other_studio,
+			title='Other Studio Flow',
+			short_description='Should not appear on the default site.',
+			description='Other studio class.',
+			instructor_name='Mira',
+			start_time=now + timedelta(days=1),
+			end_time=now + timedelta(days=1, hours=1),
+			capacity=10,
+			is_published=True,
+		)
+
+		response = self.client.get('/')
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Default Studio Flow')
+		self.assertNotContains(response, 'Other Studio Flow')
+
+
+class InstructorStudioAccessTests(TestCase):
+	def setUp(self):
+		self.user = get_user_model().objects.create_user(
+			username='studio-manager',
+			email='manager@example.com',
+			password='test-pass-123',
+		)
+		self.default_studio = Studio.get_default()
+		self.other_studio = Studio.objects.create(name='South Studio', slug='south-studio')
+		StudioMembership.objects.create(
+			studio=self.other_studio,
+			user=self.user,
+			role=StudioMembership.ROLE_MANAGER,
+		)
+		self.now = timezone.now()
+		self.other_class = YogaClass.objects.create(
+			studio=self.other_studio,
+			title='South Flow',
+			short_description='Scoped to south studio.',
+			description='Studio-specific class.',
+			instructor_name='Mira',
+			start_time=self.now + timedelta(days=1),
+			end_time=self.now + timedelta(days=1, hours=1),
+			capacity=10,
+			is_published=True,
+		)
+		self.default_class = YogaClass.objects.create(
+			studio=self.default_studio,
+			title='Default Flow',
+			short_description='Scoped to default studio.',
+			description='Default studio class.',
+			instructor_name='Elin',
+			start_time=self.now + timedelta(days=1),
+			end_time=self.now + timedelta(days=1, hours=1),
+			capacity=10,
+			is_published=True,
+		)
+
+	def test_instructor_dashboard_uses_membership_studio(self):
+		self.client.force_login(self.user)
+
+		response = self.client.get('/instructor/')
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'South Flow')
+		self.assertNotContains(response, 'Default Flow')
+
+	def test_instructor_class_create_uses_membership_studio(self):
+		self.client.force_login(self.user)
+
+		response = self.client.post('/instructor/classes/new/', data={
+			'title': 'Studio Managed Flow',
+			'short_description': 'Created by studio manager.',
+			'description': 'New scoped class.',
+			'instructor_name': 'Mira',
+			'start_time_0': (self.now + timedelta(days=3)).date().isoformat(),
+			'start_time_1': '09:00',
+			'end_time_0': (self.now + timedelta(days=3)).date().isoformat(),
+			'end_time_1': '10:00',
+			'capacity': 12,
+			'location': 'South Room',
+			'focus': 'Mobility',
+			'is_published': 'on',
+		})
+
+		self.assertEqual(response.status_code, 302)
+		created = YogaClass.objects.get(title='Studio Managed Flow')
+		self.assertEqual(created.studio, self.other_studio)
+
+	def test_user_without_studio_membership_falls_back_to_default_studio(self):
+		unassigned_user = get_user_model().objects.create_user(
+			username='no-studio',
+			email='no-studio@example.com',
+			password='test-pass-123',
+		)
+		self.client.force_login(unassigned_user)
+
+		response = self.client.get('/instructor/')
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Default Flow')
+		self.assertNotContains(response, 'South Flow')

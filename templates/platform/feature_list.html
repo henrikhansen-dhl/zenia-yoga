@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if request.LANGUAGE_CODE == 'da' %}Funktioner{% else %}Features{% endif %} | Yoga Studio Platform{% endblock %}
+{% block nav_platform %}active{% endblock %}
+
+{% block content %}
+<div class="instr-page-header">
+    <div>
+        <a class="back-link" href="{% url 'platform:studio_list' %}">← {% if request.LANGUAGE_CODE == 'da' %}Studier{% else %}Studios{% endif %}</a>
+        <h1>{% if request.LANGUAGE_CODE == 'da' %}Funktioner{% else %}Features{% endif %}</h1>
+    </div>
+    <div class="instr-actions">
+        <a class="button-secondary" href="{% url 'platform:membership_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Adgange{% else %}Access{% endif %}</a>
+        <a class="button-primary" href="{% url 'platform:feature_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Ny funktion{% else %}+ New feature{% endif %}</a>
+    </div>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-card">
+        <p class="stat-label">{% if request.LANGUAGE_CODE == 'da' %}Aktive funktioner{% else %}Active features{% endif %}</p>
+        <p class="stat-value">{{ active_feature_count }}</p>
+    </div>
+</div>
+
+{% if features %}
+<section class="instr-section">
+    <table class="instr-table">
+        <thead>
+            <tr>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Navn{% else %}Name{% endif %}</th>
+                <th>Code</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Beskrivelse{% else %}Description{% endif %}</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for feature in features %}
+            <tr>
+                <td>{{ feature.name }}</td>
+                <td>{{ feature.code }}</td>
+                <td>{% if feature.description %}{{ feature.description|truncatechars:100 }}{% else %}—{% endif %}</td>
+                <td>
+                    <span class="pill {% if feature.is_active %}pill-green{% else %}pill-grey{% endif %}">
+                        {% if feature.is_active %}{% if request.LANGUAGE_CODE == 'da' %}Aktiv{% else %}Active{% endif %}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Inaktiv{% else %}Inactive{% endif %}{% endif %}
+                    </span>
+                </td>
+                <td><a class="table-link" href="{% url 'platform:feature_edit' feature.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Rediger →{% else %}Edit →{% endif %}</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% else %}
+<div class="empty-state">
+    <h3>{% if request.LANGUAGE_CODE == 'da' %}Ingen funktioner endnu{% else %}No features yet{% endif %}</h3>
+    <p>{% if request.LANGUAGE_CODE == 'da' %}Opret funktioner som fx SMS-påmindelser, klienthåndtering eller rapportering.{% else %}Create features such as SMS reminders, client management, or reporting.{% endif %}</p>
+    <a class="button-primary" href="{% url 'platform:feature_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Ny funktion{% else %}+ New feature{% endif %}</a>
+</div>
+{% endif %}
+{% endblock %}

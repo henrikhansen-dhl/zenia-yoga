@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if request.LANGUAGE_CODE == 'da' %}Adgange{% else %}Access{% endif %} | Yoga Studio Platform{% endblock %}
+{% block nav_platform %}active{% endblock %}
+
+{% block content %}
+<div class="instr-page-header">
+    <div>
+        <a class="back-link" href="{% url 'platform:studio_list' %}">← {% if request.LANGUAGE_CODE == 'da' %}Studier{% else %}Studios{% endif %}</a>
+        <h1>{% if request.LANGUAGE_CODE == 'da' %}Studio-adgange{% else %}Studio access{% endif %}</h1>
+        <p class="hero-text">
+            {% if request.LANGUAGE_CODE == 'da' %}
+            Knyt login-brugere til de studier de må administrere i instruktørpanelet.
+            {% else %}
+            Assign login users to the studios they are allowed to manage in the instructor area.
+            {% endif %}
+        </p>
+    </div>
+    <div class="instr-actions">
+        <a class="button-secondary" href="{% url 'platform:feature_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Funktioner{% else %}Features{% endif %}</a>
+        <a class="button-primary" href="{% url 'platform:membership_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Ny adgang{% else %}+ New access{% endif %}</a>
+    </div>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-card">
+        <p class="stat-label">{% if request.LANGUAGE_CODE == 'da' %}Adgange i alt{% else %}Total access rows{% endif %}</p>
+        <p class="stat-value">{{ membership_count }}</p>
+    </div>
+    <div class="stat-card">
+        <p class="stat-label">{% if request.LANGUAGE_CODE == 'da' %}Aktive{% else %}Active{% endif %}</p>
+        <p class="stat-value">{{ active_membership_count }}</p>
+    </div>
+</div>
+
+{% if memberships %}
+<section class="instr-section">
+    <table class="instr-table">
+        <thead>
+            <tr>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Bruger{% else %}User{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Studie{% else %}Studio{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Rolle{% else %}Role{% endif %}</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for membership in memberships %}
+            <tr>
+                <td>
+                    <strong>{{ membership.user.get_full_name|default:membership.user.username }}</strong>
+                    <div class="client-email">{{ membership.user.email|default:membership.user.username }}</div>
+                </td>
+                <td>{{ membership.studio.name }}</td>
+                <td>{{ membership.get_role_display }}</td>
+                <td>
+                    <span class="pill {% if membership.is_active %}pill-green{% else %}pill-grey{% endif %}">
+                        {% if membership.is_active %}{% if request.LANGUAGE_CODE == 'da' %}Aktiv{% else %}Active{% endif %}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Inaktiv{% else %}Inactive{% endif %}{% endif %}
+                    </span>
+                </td>
+                <td><a class="table-link" href="{% url 'platform:membership_edit' membership.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Rediger →{% else %}Edit →{% endif %}</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% else %}
+<div class="empty-state">
+    <h3>{% if request.LANGUAGE_CODE == 'da' %}Ingen adgange endnu{% else %}No access rows yet{% endif %}</h3>
+    <p>{% if request.LANGUAGE_CODE == 'da' %}Opret en adgang for at give en bruger adgang til et bestemt studie.{% else %}Create an access row to give a user access to a specific studio.{% endif %}</p>
+    <a class="button-primary" href="{% url 'platform:membership_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Ny adgang{% else %}+ New access{% endif %}</a>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,4 +1,4 @@
-# Zenia Yoga
+# Yoga Studio Platform
 
 Mobile-first yoga class booking system built with Django.
 
@@ -70,7 +70,7 @@ After that, reload the web app.
 SMS_GATEWAY_ENABLED=True
 SMS_GATEWAY_USERNAME=your-cpsms-username
 SMS_GATEWAY_API_KEY=your-cpsms-api-key
-SMS_GATEWAY_FROM=ZeniaYoga
+SMS_GATEWAY_FROM=YogaStudioPlatform
 ```
 
 - Optional values:

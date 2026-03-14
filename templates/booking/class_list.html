@@ -1,6 +1,6 @@
 {% extends 'base_public.html' %}
 
-{% block title %}{% if request.LANGUAGE_CODE == 'da' %}Book et hold{% else %}Book a Class{% endif %} | Zenia Yoga{% endblock %}
+{% block title %}{% if request.LANGUAGE_CODE == 'da' %}Book et hold{% else %}Book a Class{% endif %} | Yoga Studio Platform{% endblock %}
 
 {% block content %}
 <section class="hero-card">
@@ -9,10 +9,10 @@
         <h1>{% if request.LANGUAGE_CODE == 'da' %}Book yogahold i et enkelt mobilvenligt flow.{% else %}Book a yoga class with a calm, phone-first experience.{% endif %}</h1>
         <p class="hero-text">
             {% if request.LANGUAGE_CODE == 'da' %}
-                Zenia Yoga giver dine deltagere en enkel måde at reservere deres plads på, mens du styrer hold,
+                Yoga Studio Platform giver dine deltagere en enkel måde at reservere deres plads på, mens du styrer hold,
                 undervisere, tider og kapacitet fra undervisersiden.
             {% else %}
-                Zenia Yoga gives your clients a simple way to reserve their place while you manage each class,
+                Yoga Studio Platform gives your clients a simple way to reserve their place while you manage each class,
                 teacher, schedule, and capacity from the instructor dashboard.
             {% endif %}
         </p>

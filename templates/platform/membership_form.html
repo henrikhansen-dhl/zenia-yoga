@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if membership %}{% if request.LANGUAGE_CODE == 'da' %}Rediger adgang{% else %}Edit access{% endif %}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Ny adgang{% else %}New access{% endif %}{% endif %} | Yoga Studio Platform{% endblock %}
+{% block nav_platform %}active{% endblock %}
+
+{% block content %}
+<div class="instr-page-header">
+    <div>
+        <a class="back-link" href="{% url 'platform:membership_list' %}">← {% if request.LANGUAGE_CODE == 'da' %}Adgange{% else %}Access{% endif %}</a>
+        <h1>{% if membership %}{% if request.LANGUAGE_CODE == 'da' %}Rediger adgang{% else %}Edit access{% endif %}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Ny adgang{% else %}New access{% endif %}{% endif %}</h1>
+    </div>
+</div>
+
+<div class="instr-form-wrap">
+    <form method="post" class="instr-form">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="form-errors">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <fieldset class="instr-fieldset">
+            <legend>{% if request.LANGUAGE_CODE == 'da' %}Adgangsoplysninger{% else %}Access details{% endif %}</legend>
+            <div class="form-row">
+                <label for="{{ form.studio.id_for_label }}">{{ form.studio.label }}</label>
+                {{ form.studio }}
+                {% if form.studio.errors %}<div class="field-error">{{ form.studio.errors|join:', ' }}</div>{% endif %}
+            </div>
+            <div class="form-row">
+                <label for="{{ form.user.id_for_label }}">{{ form.user.label }}</label>
+                {{ form.user }}
+                {% if form.user.errors %}<div class="field-error">{{ form.user.errors|join:', ' }}</div>{% endif %}
+            </div>
+            <div class="form-row">
+                <label for="{{ form.role.id_for_label }}">{{ form.role.label }}</label>
+                {{ form.role }}
+                {% if form.role.help_text %}<p class="field-help">{{ form.role.help_text }}</p>{% endif %}
+                {% if form.role.errors %}<div class="field-error">{{ form.role.errors|join:', ' }}</div>{% endif %}
+            </div>
+            <div class="form-row form-row-checkbox">
+                {{ form.is_active }}
+                <label for="{{ form.is_active.id_for_label }}">{{ form.is_active.label }}</label>
+            </div>
+        </fieldset>
+
+        <div class="instr-form-actions">
+            <button class="button-primary" type="submit">{{ action }}</button>
+            <a class="button-secondary" href="{% url 'platform:membership_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Annuller{% else %}Cancel{% endif %}</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

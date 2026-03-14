@@ -7,7 +7,6 @@ from urllib import error, request as urllib_request
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -16,6 +15,7 @@ from django.utils.translation import get_language
 
 from .forms import ClientForm, WeeklyParticipantQuickAddForm, WeeklyParticipantsForm, YogaClassForm
 from .models import Booking, Client, SmsReminderLog, YogaClass
+from .studio_access import studio_login_required
 
 
 def _msg(english, danish):
@@ -37,15 +37,17 @@ def _normalize_phone(raw_phone):
 
 def _build_sms_rows(request, now=None):
     now = now or timezone.now()
+    studio = request.studio
     rows = []
     exported = set()
 
-    clients = Client.objects.prefetch_related('reminder_classes').all().order_by('name')
+    clients = Client.objects.filter(studio=studio).prefetch_related('reminder_classes').all().order_by('name')
     for client in clients:
         if not client.phone:
             continue
 
         upcoming_classes = client.reminder_classes.filter(
+            studio=studio,
             is_published=True,
             start_time__gte=now,
         ).order_by('start_time')
@@ -79,11 +81,13 @@ def _build_sms_rows(request, now=None):
                 'sms_message_da': sms_da,
                 'sms_message_en': sms_en,
                 'class_pk': yoga_class.pk,
+                'studio_id': yoga_class.studio_id,
             })
             exported.add(export_key)
 
     today_local_date = timezone.localdate(now)
     recurring_classes = YogaClass.objects.filter(
+        studio=studio,
         is_published=True,
         start_time__gte=now,
     ).select_related('recurrence_parent').prefetch_related('bookings')
@@ -138,6 +142,7 @@ def _build_sms_rows(request, now=None):
                 'sms_message_da': sms_da,
                 'sms_message_en': sms_en,
                 'class_pk': yoga_class.pk,
+                'studio_id': yoga_class.studio_id,
             })
             exported.add(export_key)
 
@@ -204,15 +209,17 @@ def _sms_gateway_ready():
     )
 
 
-@login_required(login_url='/admin/login/')
+@studio_login_required
 def dashboard(request):
     now = timezone.now()
+    studio = request.studio
     YogaClass.sync_all_weekly_occurrences(upcoming_limit=2, now=now)
-    upcoming = YogaClass.objects.filter(start_time__gte=now).order_by('start_time')
-    past = YogaClass.objects.filter(start_time__lt=now).order_by('-start_time')
-    total_bookings = Booking.objects.count()
-    total_classes = YogaClass.objects.count()
+    upcoming = YogaClass.objects.filter(studio=studio, start_time__gte=now).order_by('start_time')
+    past = YogaClass.objects.filter(studio=studio, start_time__lt=now).order_by('-start_time')
+    total_bookings = Booking.objects.filter(studio=studio).count()
+    total_classes = YogaClass.objects.filter(studio=studio).count()
     context = {
+        'studio': studio,
         'upcoming': upcoming,
         'past': past,
         'total_bookings': total_bookings,
@@ -222,31 +229,37 @@ def dashboard(request):
     return render(request, 'instructor/dashboard.html', context)
 
 
-@login_required(login_url='/admin/login/')
+@studio_login_required
 def class_list(request):
     now = timezone.now()
+    studio = request.studio
     YogaClass.sync_all_weekly_occurrences(upcoming_limit=2, now=now)
     upcoming = YogaClass.objects.filter(
+        studio=studio,
         start_time__gte=now
     ).order_by('start_time')
     past = YogaClass.objects.filter(
+        studio=studio,
         start_time__lt=now
     ).order_by('-start_time')
-    context = {'upcoming': upcoming, 'past': past}
+    context = {'studio': studio, 'upcoming': upcoming, 'past': past}
     return render(request, 'instructor/class_list.html', context)
 
 
-@login_required(login_url='/admin/login/')
+@studio_login_required
 def client_list(request):
     now = timezone.now()
+    studio = request.studio
 
     if request.method == 'POST':
-        form = ClientForm(request.POST)
+        form = ClientForm(request.POST, studio=studio)
         if form.is_valid():
             client_email = form.cleaned_data['email']
             client, created = Client.objects.update_or_create(
+                studio=studio,
                 email=client_email,
                 defaults={
+                    'studio': studio,
                     'name': form.cleaned_data['name'],
                     'phone': form.cleaned_data['phone'],
                 },
@@ -261,9 +274,9 @@ def client_list(request):
             )
             return redirect('instructor:client_list')
     else:
-        form = ClientForm()
+        form = ClientForm(studio=studio)
 
-    bookings = Booking.objects.select_related('yoga_class').order_by(
+    bookings = Booking.objects.filter(studio=studio).select_related('yoga_class').order_by(
         'client_name',
         'created_at',
         'yoga_class__start_time',
@@ -295,7 +308,7 @@ def client_list(request):
             client_entry['class_ids'].add(booking.yoga_class_id)
             client_entry['classes'].append(booking.yoga_class)
 
-    manual_clients = Client.objects.prefetch_related('reminder_classes').all().order_by('name')
+    manual_clients = Client.objects.filter(studio=studio).prefetch_related('reminder_classes').all().order_by('name')
     for manual_client in manual_clients:
         key = manual_client.email.strip().lower()
         if key not in clients_by_email:
@@ -332,16 +345,18 @@ def client_list(request):
         'clients': clients,
         'client_count': len(clients),
         'form': form,
-        'recent_sms_logs': SmsReminderLog.objects.select_related('yoga_class').all()[:20],
+        'recent_sms_logs': SmsReminderLog.objects.filter(studio=studio).select_related('yoga_class').all()[:20],
+        'studio': studio,
     }
     return render(request, 'instructor/client_list.html', context)
 
 
-@login_required(login_url='/admin/login/')
+@studio_login_required
 def client_edit(request, pk):
-    client = get_object_or_404(Client, pk=pk)
+    studio = request.studio
+    client = get_object_or_404(Client, pk=pk, studio=studio)
     if request.method == 'POST':
-        form = ClientForm(request.POST, instance=client)
+        form = ClientForm(request.POST, instance=client, studio=studio)
         if form.is_valid():
             client = form.save()
             messages.success(
@@ -353,7 +368,7 @@ def client_edit(request, pk):
             )
             return redirect('instructor:client_list')
     else:
-        form = ClientForm(instance=client)
+        form = ClientForm(instance=client, studio=studio)
 
     context = {
         'form': form,
@@ -363,9 +378,9 @@ def client_edit(request, pk):
     return render(request, 'instructor/client_form.html', context)
 
 
-@login_required(login_url='/admin/login/')
+@studio_login_required
 def client_delete(request, pk):
-    client = get_object_or_404(Client, pk=pk)
+    client = get_object_or_404(Client, pk=pk, studio=request.studio)
     if request.method == 'POST':
         client_name = client.name
         client.delete()
@@ -384,7 +399,7 @@ def client_delete(request, pk):
     return render(request, 'instructor/client_confirm_delete.html', context)
 
 
-@login_required(login_url='/admin/login/')
+@studio_login_required
 def export_sms_reminders(request):
     rows = _build_sms_rows(request)
     response = HttpResponse(content_type='text/csv; charset=utf-8')
@@ -419,7 +434,7 @@ def export_sms_reminders(request):
     return response
 
 
-@login_required(login_url='/admin/login/')
+@studio_login_required
 def send_sms_reminders(request):
     if request.method != 'POST':
         return redirect('instructor:client_list')
@@ -460,6 +475,7 @@ def send_sms_reminders(request):
                 failure_examples.append(f"{row['client_name']}: invalid phone")
             logs_to_create.append(
                 SmsReminderLog(
+                    studio_id=row['studio_id'],
                     yoga_class_id=row['class_pk'],
                     client_name=row['client_name'],
                     client_email=row['email'],
@@ -481,6 +497,7 @@ def send_sms_reminders(request):
             sent_count += 1
             logs_to_create.append(
                 SmsReminderLog(
+                    studio_id=row['studio_id'],
                     yoga_class_id=row['class_pk'],
                     client_name=row['client_name'],
                     client_email=row['email'],
@@ -501,6 +518,7 @@ def send_sms_reminders(request):
                 failure_examples.append(f"{row['client_name']}: {error_text}")
             logs_to_create.append(
                 SmsReminderLog(
+                    studio_id=row['studio_id'],
                     yoga_class_id=row['class_pk'],
                     client_name=row['client_name'],
                     client_email=row['email'],
@@ -541,12 +559,15 @@ def send_sms_reminders(request):
     return redirect('instructor:client_list')
 
 
-@login_required(login_url='/admin/login/')
+@studio_login_required
 def class_create(request):
+    studio = request.studio
     if request.method == 'POST':
         form = YogaClassForm(request.POST, request.FILES)
         if form.is_valid():
-            yoga_class = form.save()
+            yoga_class = form.save(commit=False)
+            yoga_class.studio = studio
+            yoga_class.save()
             yoga_class.sync_weekly_occurrences(upcoming_limit=2)
             messages.success(
                 request,
@@ -561,9 +582,9 @@ def class_create(request):
     })
 
 
-@login_required(login_url='/admin/login/')
+@studio_login_required
 def class_detail(request, pk):
-    yoga_class = get_object_or_404(YogaClass, pk=pk)
+    yoga_class = get_object_or_404(YogaClass, pk=pk, studio=request.studio)
     yoga_class.sync_weekly_occurrences(upcoming_limit=2)
     root_class = yoga_class.recurrence_root
     bookings = yoga_class.bookings.order_by('created_at')
@@ -571,6 +592,7 @@ def class_detail(request, pk):
     participant_quick_add_form = None
     if root_class.is_weekly_recurring:
         participants_form = WeeklyParticipantsForm(
+            studio=root_class.studio,
             initial={'participants': root_class.series_participants.all()},
         )
         participant_quick_add_form = WeeklyParticipantQuickAddForm()
@@ -590,9 +612,9 @@ def class_detail(request, pk):
     return render(request, 'instructor/class_detail.html', context)
 
 
-@login_required(login_url='/admin/login/')
+@studio_login_required
 def class_participants_update(request, pk):
-    yoga_class = get_object_or_404(YogaClass, pk=pk)
+    yoga_class = get_object_or_404(YogaClass, pk=pk, studio=request.studio)
     root_class = yoga_class.recurrence_root
 
     if not root_class.is_weekly_recurring:
@@ -603,7 +625,7 @@ def class_participants_update(request, pk):
         return redirect('instructor:class_detail', pk=yoga_class.pk)
 
     if request.method == 'POST':
-        form = WeeklyParticipantsForm(request.POST)
+        form = WeeklyParticipantsForm(request.POST, studio=root_class.studio)
         if form.is_valid():
             root_class.series_participants.set(form.cleaned_data['participants'])
             messages.success(
@@ -614,9 +636,9 @@ def class_participants_update(request, pk):
     return redirect('instructor:class_detail', pk=yoga_class.pk)
 
 
-@login_required(login_url='/admin/login/')
+@studio_login_required
 def class_participant_quick_add(request, pk):
-    yoga_class = get_object_or_404(YogaClass, pk=pk)
+    yoga_class = get_object_or_404(YogaClass, pk=pk, studio=request.studio)
     root_class = yoga_class.recurrence_root
 
     if not root_class.is_weekly_recurring:
@@ -634,8 +656,10 @@ def class_participant_quick_add(request, pk):
             phone = form.cleaned_data['phone']
 
             client, created = Client.objects.get_or_create(
+                studio=root_class.studio,
                 email=email,
                 defaults={
+                    'studio': root_class.studio,
                     'name': name,
                     'phone': phone,
                 },
@@ -667,9 +691,9 @@ def class_participant_quick_add(request, pk):
     return redirect('instructor:class_detail', pk=yoga_class.pk)
 
 
-@login_required(login_url='/admin/login/')
+@studio_login_required
 def class_participant_remove(request, pk, client_pk):
-    yoga_class = get_object_or_404(YogaClass, pk=pk)
+    yoga_class = get_object_or_404(YogaClass, pk=pk, studio=request.studio)
     root_class = yoga_class.recurrence_root
 
     if not root_class.is_weekly_recurring:
@@ -680,7 +704,7 @@ def class_participant_remove(request, pk, client_pk):
         return redirect('instructor:class_detail', pk=yoga_class.pk)
 
     if request.method == 'POST':
-        client = get_object_or_404(Client, pk=client_pk)
+        client = get_object_or_404(Client, pk=client_pk, studio=root_class.studio)
         root_class.series_participants.remove(client)
         messages.success(
             request,
@@ -693,9 +717,9 @@ def class_participant_remove(request, pk, client_pk):
     return redirect('instructor:class_detail', pk=yoga_class.pk)
 
 
-@login_required(login_url='/admin/login/')
+@studio_login_required
 def class_edit(request, pk):
-    yoga_class = get_object_or_404(YogaClass, pk=pk)
+    yoga_class = get_object_or_404(YogaClass, pk=pk, studio=request.studio)
     if request.method == 'POST':
         form = YogaClassForm(request.POST, request.FILES, instance=yoga_class)
         if form.is_valid():
@@ -715,10 +739,10 @@ def class_edit(request, pk):
     })
 
 
-@login_required(login_url='/admin/login/')
+@studio_login_required
 def class_toggle_publish(request, pk):
     if request.method == 'POST':
-        yoga_class = get_object_or_404(YogaClass, pk=pk)
+        yoga_class = get_object_or_404(YogaClass, pk=pk, studio=request.studio)
         yoga_class.is_published = not yoga_class.is_published
         yoga_class.save(update_fields=['is_published'])
         state = _msg('published', 'udgivet') if yoga_class.is_published else _msg('unpublished', 'afpubliceret')
@@ -726,9 +750,9 @@ def class_toggle_publish(request, pk):
     return redirect('instructor:class_detail', pk=pk)
 
 
-@login_required(login_url='/admin/login/')
+@studio_login_required
 def class_delete(request, pk):
-    yoga_class = get_object_or_404(YogaClass, pk=pk)
+    yoga_class = get_object_or_404(YogaClass, pk=pk, studio=request.studio)
     if request.method == 'POST':
         title = yoga_class.title
         yoga_class.delete()
@@ -740,9 +764,9 @@ def class_delete(request, pk):
     })
 
 
-@login_required(login_url='/admin/login/')
+@studio_login_required
 def booking_delete(request, pk):
-    booking = get_object_or_404(Booking, pk=pk)
+    booking = get_object_or_404(Booking, pk=pk, studio=request.studio)
     class_pk = booking.yoga_class_id
     if request.method == 'POST':
         name = booking.client_name

@@ -1,3 +1,4 @@
+from django.conf import settings
 from datetime import timedelta
 
 from django.core.exceptions import ValidationError
@@ -5,7 +6,133 @@ from django.db import models
 from django.utils import timezone
 
 
+class Studio(models.Model):
+	name = models.CharField(max_length=140)
+	slug = models.SlugField(max_length=160, unique=True)
+	contact_name = models.CharField(max_length=120, blank=True)
+	contact_email = models.EmailField(blank=True)
+	contact_phone = models.CharField(max_length=40, blank=True)
+	billing_email = models.EmailField(blank=True)
+	subscription_notes = models.TextField(blank=True)
+	is_active = models.BooleanField(default=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['name']
+
+	def __str__(self):
+		return self.name
+
+	@property
+	def enabled_feature_accesses(self):
+		return self.feature_accesses.filter(is_enabled=True).select_related('feature').order_by('feature__name')
+
+	@property
+	def enabled_feature_codes(self):
+		return list(self.enabled_feature_accesses.values_list('feature__code', flat=True))
+
+	@property
+	def active_memberships(self):
+		return self.memberships.filter(is_active=True).select_related('user').order_by('user__username')
+
+	@classmethod
+	def get_default(cls):
+		studio, _ = cls.objects.get_or_create(
+			slug='zenia-yoga',
+			defaults={
+				'name': 'Zenia Yoga',
+				'is_active': True,
+			},
+		)
+		return studio
+
+
+class Feature(models.Model):
+	code = models.SlugField(max_length=80, unique=True)
+	name = models.CharField(max_length=120)
+	description = models.TextField(blank=True)
+	is_active = models.BooleanField(default=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ['name']
+
+	def __str__(self):
+		return self.name
+
+
+class StudioFeatureAccess(models.Model):
+	studio = models.ForeignKey(
+		Studio,
+		on_delete=models.CASCADE,
+		related_name='feature_accesses',
+	)
+	feature = models.ForeignKey(
+		Feature,
+		on_delete=models.CASCADE,
+		related_name='studio_accesses',
+	)
+	is_enabled = models.BooleanField(default=True)
+	enabled_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ['studio__name', 'feature__name']
+		constraints = [
+			models.UniqueConstraint(
+				fields=['studio', 'feature'],
+				name='unique_feature_access_per_studio',
+			),
+		]
+
+	def __str__(self):
+		state = 'enabled' if self.is_enabled else 'disabled'
+		return f'{self.studio.name} - {self.feature.name} ({state})'
+
+
+class StudioMembership(models.Model):
+	ROLE_OWNER = 'owner'
+	ROLE_MANAGER = 'manager'
+	ROLE_STAFF = 'staff'
+	ROLE_CHOICES = [
+		(ROLE_OWNER, 'Owner'),
+		(ROLE_MANAGER, 'Manager'),
+		(ROLE_STAFF, 'Staff'),
+	]
+
+	studio = models.ForeignKey(
+		Studio,
+		on_delete=models.CASCADE,
+		related_name='memberships',
+	)
+	user = models.ForeignKey(
+		settings.AUTH_USER_MODEL,
+		on_delete=models.CASCADE,
+		related_name='studio_memberships',
+	)
+	role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_MANAGER)
+	is_active = models.BooleanField(default=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ['studio__name', 'user__username']
+		constraints = [
+			models.UniqueConstraint(
+				fields=['studio', 'user'],
+				name='unique_studio_membership_per_user',
+			),
+		]
+
+	def __str__(self):
+		return f'{self.user} - {self.studio.name} ({self.role})'
+
+
 class YogaClass(models.Model):
+	studio = models.ForeignKey(
+		Studio,
+		on_delete=models.PROTECT,
+		related_name='classes',
+	)
 	title = models.CharField(max_length=120)
 	short_description = models.CharField(max_length=180)
 	description = models.TextField(blank=True)
@@ -69,6 +196,9 @@ class YogaClass(models.Model):
 		if self.recurrence_parent_id and self.recurrence_parent_id == self.pk:
 			raise ValidationError('A recurring class cannot reference itself as its parent.')
 
+		if self.recurrence_parent_id and self.recurrence_parent and self.recurrence_parent.studio_id != self.studio_id:
+			raise ValidationError('Recurring classes must belong to the same studio as the parent series.')
+
 	@property
 	def booked_count(self):
 		return self.bookings.count()
@@ -120,6 +250,7 @@ class YogaClass(models.Model):
 	def _occurrence_defaults(self, start_time):
 		duration = self.end_time - self.start_time
 		return {
+			'studio': self.studio,
 			'title': self.title,
 			'short_description': self.short_description,
 			'description': self.description,
@@ -180,6 +311,8 @@ class YogaClass(models.Model):
 		return start_time in root.upcoming_occurrence_starts(upcoming_limit=upcoming_limit, now=now)
 
 	def save(self, *args, **kwargs):
+		if not self.studio_id:
+			self.studio = Studio.get_default()
 		self.start_time = self._as_aware(self.start_time)
 		self.end_time = self._as_aware(self.end_time)
 		self.full_clean()
@@ -189,8 +322,13 @@ class YogaClass(models.Model):
 
 
 class Client(models.Model):
+	studio = models.ForeignKey(
+		Studio,
+		on_delete=models.PROTECT,
+		related_name='clients',
+	)
 	name = models.CharField(max_length=120)
-	email = models.EmailField(unique=True)
+	email = models.EmailField()
 	phone = models.CharField(max_length=40, blank=True)
 	reminder_classes = models.ManyToManyField(
 		YogaClass,
@@ -201,6 +339,12 @@ class Client(models.Model):
 
 	class Meta:
 		ordering = ['name', 'email']
+		constraints = [
+			models.UniqueConstraint(
+				fields=['studio', 'email'],
+				name='unique_client_email_per_studio',
+			),
+		]
 
 	def __str__(self):
 		return f"{self.name} ({self.email})"
@@ -209,12 +353,19 @@ class Client(models.Model):
 		self.email = self.email.strip().lower()
 
 	def save(self, *args, **kwargs):
+		if not self.studio_id:
+			self.studio = Studio.get_default()
 		self.email = self.email.strip().lower()
 		self.full_clean()
 		super().save(*args, **kwargs)
 
 
 class SmsReminderLog(models.Model):
+	studio = models.ForeignKey(
+		Studio,
+		on_delete=models.PROTECT,
+		related_name='sms_logs',
+	)
 	STATUS_SENT = 'sent'
 	STATUS_FAILED = 'failed'
 	STATUS_SKIPPED = 'skipped'
@@ -250,8 +401,21 @@ class SmsReminderLog(models.Model):
 	def __str__(self):
 		return f"{self.client_name} {self.class_title} ({self.status})"
 
+	def save(self, *args, **kwargs):
+		if not self.studio_id:
+			if self.yoga_class_id:
+				self.studio_id = self.yoga_class.studio_id
+			else:
+				self.studio = Studio.get_default()
+		super().save(*args, **kwargs)
+
 
 class Booking(models.Model):
+	studio = models.ForeignKey(
+		Studio,
+		on_delete=models.PROTECT,
+		related_name='bookings',
+	)
 	yoga_class = models.ForeignKey(
 		YogaClass,
 		on_delete=models.CASCADE,
@@ -279,6 +443,12 @@ class Booking(models.Model):
 		if not self.yoga_class_id:
 			return
 
+		if not self.studio_id:
+			self.studio_id = self.yoga_class.studio_id
+
+		if self.studio_id != self.yoga_class.studio_id:
+			raise ValidationError('Bookings must belong to the same studio as the selected class.')
+
 		if self.yoga_class.start_time <= timezone.now():
 			raise ValidationError('This class has already started and can no longer be booked.')
 
@@ -287,6 +457,10 @@ class Booking(models.Model):
 			raise ValidationError('This class is already full.')
 
 	def save(self, *args, **kwargs):
+		if not self.studio_id and self.yoga_class_id:
+			self.studio_id = self.yoga_class.studio_id
+		elif not self.studio_id:
+			self.studio = Studio.get_default()
 		self.client_email = self.client_email.strip().lower()
 		self.full_clean()
 		super().save(*args, **kwargs)

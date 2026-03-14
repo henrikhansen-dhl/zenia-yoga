@@ -1,10 +1,11 @@
 from datetime import datetime
 
 from django import forms
+from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.utils.translation import get_language
 
-from .models import Booking, Client, YogaClass
+from .models import Booking, Client, Feature, Studio, StudioFeatureAccess, StudioMembership, YogaClass
 
 
 class LocalizedSplitDateTimeWidget(forms.MultiWidget):
@@ -84,7 +85,7 @@ class YogaClassForm(forms.ModelForm):
             'short_description': 'Kort tekst til bookingkortet' if is_danish else 'One-line summary shown on the class card',
             'description': 'Hvad skal deltagerne vide?' if is_danish else 'What should participants expect?',
             'instructor_name': 'Underviserens navn' if is_danish else 'Instructor name',
-            'location': 'Fx Zenia Yoga Studio' if is_danish else 'For example Zenia Yoga Studio',
+            'location': 'Fx yoga-studie i centrum' if is_danish else 'For example downtown yoga studio',
             'focus': 'Fx Restorativ, Vinyasa eller Breathwork' if is_danish else 'For example Restorative, Vinyasa or Breathwork',
         }
 
@@ -201,8 +202,9 @@ class ClientForm(forms.ModelForm):
             'reminder_classes': forms.SelectMultiple(attrs={'size': 6}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, studio=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.studio = studio or getattr(self.instance, 'studio', None) or Studio.get_default()
         language = get_language() or 'en'
         is_danish = language.startswith('da')
 
@@ -222,6 +224,7 @@ class ClientForm(forms.ModelForm):
         )
 
         self.fields['reminder_classes'].queryset = YogaClass.objects.filter(
+            studio=self.studio,
             is_published=True,
             start_time__gte=timezone.now(),
         ).order_by('start_time')
@@ -252,12 +255,13 @@ class WeeklyParticipantsForm(forms.Form):
         widget=forms.SelectMultiple(attrs={'size': 8}),
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, studio=None, **kwargs):
         super().__init__(*args, **kwargs)
+        studio = studio or Studio.get_default()
         language = get_language() or 'en'
         is_danish = language.startswith('da')
 
-        self.fields['participants'].queryset = Client.objects.all().order_by('name', 'email')
+        self.fields['participants'].queryset = Client.objects.filter(studio=studio).order_by('name', 'email')
         self.fields['participants'].label = (
             'Deltagere i ugentlig serie'
             if is_danish else
@@ -292,3 +296,171 @@ class WeeklyParticipantQuickAddForm(forms.Form):
 
     def clean_email(self):
         return self.cleaned_data['email'].strip().lower()
+
+
+class StudioForm(forms.ModelForm):
+    enabled_features = forms.ModelMultipleChoiceField(
+        queryset=Feature.objects.none(),
+        required=False,
+        widget=forms.SelectMultiple(attrs={'size': 8}),
+    )
+
+    class Meta:
+        model = Studio
+        fields = [
+            'name',
+            'slug',
+            'contact_name',
+            'contact_email',
+            'contact_phone',
+            'billing_email',
+            'subscription_notes',
+            'is_active',
+        ]
+        widgets = {
+            'subscription_notes': forms.Textarea(attrs={'rows': 5}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        language = get_language() or 'en'
+        is_danish = language.startswith('da')
+
+        self.fields['enabled_features'].queryset = Feature.objects.filter(is_active=True).order_by('name')
+        if self.instance.pk:
+            self.fields['enabled_features'].initial = self.instance.feature_accesses.filter(
+                is_enabled=True,
+                feature__is_active=True,
+            ).values_list('feature_id', flat=True)
+
+        labels = {
+            'name': 'Studienavn' if is_danish else 'Studio name',
+            'slug': 'Slug' if is_danish else 'Slug',
+            'contact_name': 'Kontaktperson' if is_danish else 'Contact name',
+            'contact_email': 'Kontakt e-mail' if is_danish else 'Contact email',
+            'contact_phone': 'Kontakttelefon' if is_danish else 'Contact phone',
+            'billing_email': 'Faktura e-mail' if is_danish else 'Billing email',
+            'subscription_notes': 'Abonnementsnoter' if is_danish else 'Subscription notes',
+            'is_active': 'Aktiv' if is_danish else 'Active',
+            'enabled_features': 'Aktive funktioner' if is_danish else 'Enabled features',
+        }
+        placeholders = {
+            'name': 'Fx Aarhus Yoga Studio' if is_danish else 'For example Aarhus Yoga Studio',
+            'slug': 'fx aarhus-yoga-studio' if is_danish else 'for example aarhus-yoga-studio',
+            'contact_name': 'Navn på ejer eller manager' if is_danish else 'Owner or manager name',
+            'contact_email': 'studio@example.com',
+            'contact_phone': 'Telefonnummer' if is_danish else 'Phone number',
+            'billing_email': 'billing@example.com',
+            'subscription_notes': (
+                'Fx hvilke moduler studiet betaler for, pris og særlige aftaler.'
+                if is_danish else
+                'For example paid modules, pricing, and agreement notes.'
+            ),
+        }
+
+        for name, label in labels.items():
+            self.fields[name].label = label
+
+        for name, placeholder in placeholders.items():
+            self.fields[name].widget.attrs['placeholder'] = placeholder
+
+        self.fields['enabled_features'].help_text = (
+            'Vælg de funktioner som studiet har adgang til.'
+            if is_danish else
+            'Choose the functions this studio should have access to.'
+        )
+
+    def save(self, commit=True):
+        studio = super().save(commit=commit)
+        if not commit:
+            return studio
+
+        selected_features = set(self.cleaned_data['enabled_features'].values_list('pk', flat=True))
+        active_feature_ids = set(Feature.objects.filter(is_active=True).values_list('pk', flat=True))
+
+        for feature_id in selected_features:
+            StudioFeatureAccess.objects.update_or_create(
+                studio=studio,
+                feature_id=feature_id,
+                defaults={'is_enabled': True},
+            )
+
+        StudioFeatureAccess.objects.filter(
+            studio=studio,
+            feature_id__in=active_feature_ids - selected_features,
+        ).update(is_enabled=False)
+
+        return studio
+
+
+class FeatureForm(forms.ModelForm):
+    class Meta:
+        model = Feature
+        fields = ['code', 'name', 'description', 'is_active']
+        widgets = {
+            'description': forms.Textarea(attrs={'rows': 5}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        language = get_language() or 'en'
+        is_danish = language.startswith('da')
+
+        labels = {
+            'code': 'Funktionskode' if is_danish else 'Feature code',
+            'name': 'Navn' if is_danish else 'Name',
+            'description': 'Beskrivelse' if is_danish else 'Description',
+            'is_active': 'Aktiv' if is_danish else 'Active',
+        }
+        placeholders = {
+            'code': 'fx sms-reminders' if is_danish else 'for example sms-reminders',
+            'name': 'Fx SMS påmindelser' if is_danish else 'For example SMS reminders',
+            'description': 'Kort beskrivelse af funktionen' if is_danish else 'Short description of the feature',
+        }
+
+        for name, label in labels.items():
+            self.fields[name].label = label
+
+        for name, placeholder in placeholders.items():
+            self.fields[name].widget.attrs['placeholder'] = placeholder
+
+
+class StudioMembershipForm(forms.ModelForm):
+    class Meta:
+        model = StudioMembership
+        fields = ['studio', 'user', 'role', 'is_active']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        language = get_language() or 'en'
+        is_danish = language.startswith('da')
+        user_model = get_user_model()
+
+        self.fields['studio'].queryset = Studio.objects.filter(is_active=True).order_by('name')
+        self.fields['user'].queryset = user_model.objects.filter(is_active=True).order_by('username')
+
+        labels = {
+            'studio': 'Studie' if is_danish else 'Studio',
+            'user': 'Bruger' if is_danish else 'User',
+            'role': 'Rolle' if is_danish else 'Role',
+            'is_active': 'Aktiv' if is_danish else 'Active',
+        }
+        for name, label in labels.items():
+            self.fields[name].label = label
+
+        self.fields['studio'].label_from_instance = lambda studio: studio.name
+        self.fields['user'].label_from_instance = self._user_label
+        self.fields['role'].help_text = (
+            'Brug owner til ejere, manager til studieledere og staff til medarbejdere.'
+            if is_danish else
+            'Use owner for owners, manager for studio leads, and staff for team members.'
+        )
+
+    @staticmethod
+    def _user_label(user):
+        full_name = user.get_full_name().strip()
+        if user.email and full_name:
+            return f'{full_name} ({user.email})'
+        if user.email:
+            return f'{user.username} ({user.email})'
+        return user.username

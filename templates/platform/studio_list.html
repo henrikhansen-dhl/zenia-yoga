@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if request.LANGUAGE_CODE == 'da' %}Studier{% else %}Studios{% endif %} | Yoga Studio Platform{% endblock %}
+{% block nav_platform %}active{% endblock %}
+
+{% block content %}
+<div class="instr-page-header">
+    <div>
+        <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Platform{% else %}Platform{% endif %}</p>
+        <h1>{% if request.LANGUAGE_CODE == 'da' %}Studier{% else %}Studios{% endif %}</h1>
+        <p class="hero-text">
+            {% if request.LANGUAGE_CODE == 'da' %}
+            Administrer hvilke studier der bruger systemet, og hvilke funktioner de betaler for.
+            {% else %}
+            Manage which studios use the system and which functions they pay for.
+            {% endif %}
+        </p>
+    </div>
+    <div class="instr-actions">
+        <a class="button-secondary" href="{% url 'platform:feature_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Funktioner{% else %}Features{% endif %}</a>
+        <a class="button-secondary" href="{% url 'platform:membership_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Adgange{% else %}Access{% endif %}</a>
+        <a class="button-primary" href="{% url 'platform:studio_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Nyt studie{% else %}+ New studio{% endif %}</a>
+    </div>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-card">
+        <p class="stat-label">{% if request.LANGUAGE_CODE == 'da' %}Studier i alt{% else %}Total studios{% endif %}</p>
+        <p class="stat-value">{{ studio_count }}</p>
+    </div>
+    <div class="stat-card">
+        <p class="stat-label">{% if request.LANGUAGE_CODE == 'da' %}Aktive studier{% else %}Active studios{% endif %}</p>
+        <p class="stat-value">{{ active_studio_count }}</p>
+    </div>
+    <div class="stat-card">
+        <p class="stat-label">{% if request.LANGUAGE_CODE == 'da' %}Aktive funktioner{% else %}Active features{% endif %}</p>
+        <p class="stat-value">{{ feature_count }}</p>
+    </div>
+</div>
+
+{% if studios %}
+<section class="instr-section">
+    <table class="instr-table">
+        <thead>
+            <tr>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Studie{% else %}Studio{% endif %}</th>
+                <th>Slug</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Kontakt{% else %}Contact{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Faktura{% else %}Billing{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Funktioner{% else %}Features{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Brugere{% else %}Users{% endif %}</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for studio in studios %}
+            <tr>
+                <td>
+                    <strong>{{ studio.name }}</strong>
+                    {% if studio.subscription_notes %}
+                    <div class="client-email">{{ studio.subscription_notes|truncatechars:90 }}</div>
+                    {% endif %}
+                </td>
+                <td>{{ studio.slug }}</td>
+                <td>
+                    {% if studio.contact_name %}{{ studio.contact_name }}<br>{% endif %}
+                    {% if studio.contact_email %}<span class="client-email">{{ studio.contact_email }}</span>{% else %}—{% endif %}
+                </td>
+                <td>{% if studio.billing_email %}{{ studio.billing_email }}{% else %}—{% endif %}</td>
+                <td>
+                    {% with feature_accesses=studio.enabled_feature_accesses %}
+                        {% if feature_accesses %}
+                            {% for access in feature_accesses %}
+                                <span class="pill pill-grey">{{ access.feature.name }}</span>
+                            {% endfor %}
+                        {% else %}
+                            —
+                        {% endif %}
+                    {% endwith %}
+                </td>
+                <td>{{ studio.active_memberships.count }}</td>
+                <td>
+                    <span class="pill {% if studio.is_active %}pill-green{% else %}pill-grey{% endif %}">
+                        {% if studio.is_active %}{% if request.LANGUAGE_CODE == 'da' %}Aktiv{% else %}Active{% endif %}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Inaktiv{% else %}Inactive{% endif %}{% endif %}
+                    </span>
+                </td>
+                <td><a class="table-link" href="{% url 'platform:studio_edit' studio.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Rediger →{% else %}Edit →{% endif %}</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% else %}
+<div class="empty-state">
+    <h3>{% if request.LANGUAGE_CODE == 'da' %}Ingen studier endnu{% else %}No studios yet{% endif %}</h3>
+    <p>{% if request.LANGUAGE_CODE == 'da' %}Opret dit første studie for at begynde at administrere kunder og funktioner.{% else %}Create your first studio to start managing customers and feature access.{% endif %}</p>
+    <a class="button-primary" href="{% url 'platform:studio_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Nyt studie{% else %}+ New studio{% endif %}</a>
+</div>
+{% endif %}
+{% endblock %}
