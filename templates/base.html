@@ -31,7 +31,11 @@
                     <button class="language-button {% if request.LANGUAGE_CODE == 'da' %}is-active{% endif %}" type="submit" name="language" value="da">DA</button>
                 </form>
                 <a class="instr-nav-link" href="{% url 'booking:class_list' %}">{% if request.LANGUAGE_CODE == 'da' %}← Offentlig side{% else %}← Public site{% endif %}</a>
-                <a class="instr-nav-link" href="/admin/logout/?next=/">{% if request.LANGUAGE_CODE == 'da' %}Log ud{% else %}Log out{% endif %}</a>
+                <form class="instr-logout-form" action="{% url 'admin:logout' %}" method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{% url 'booking:class_list' %}">
+                    <button class="instr-nav-link instr-nav-button" type="submit">{% if request.LANGUAGE_CODE == 'da' %}Log ud{% else %}Log out{% endif %}</button>
+                </form>
             </div>
         </aside>
 

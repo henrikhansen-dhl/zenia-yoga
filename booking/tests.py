@@ -250,6 +250,23 @@ class WeeklyRecurrenceTests(TestCase):
 		self.assertNotIn(participant, root_class.series_participants.all())
 
 
+class InstructorShellTests(TestCase):
+	def test_instructor_layout_uses_post_logout_form(self):
+		user = get_user_model().objects.create_user(
+			username='shell-user',
+			email='shell-user@example.com',
+			password='test-pass-123',
+		)
+		self.client.force_login(user)
+
+		response = self.client.get('/instructor/')
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'action="/admin/logout/"', html=False)
+		self.assertContains(response, 'method="post"', html=False)
+		self.assertNotContains(response, '/admin/logout/?next=/')
+
+
 class ClientManagementViewTests(TestCase):
 	def setUp(self):
 		self.user = get_user_model().objects.create_user(

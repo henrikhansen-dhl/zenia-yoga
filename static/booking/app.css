@@ -487,6 +487,14 @@ h3 {
     transition: background 160ms ease, color 160ms ease;
 }
 
+.instr-nav-button {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+}
+
 .instr-nav-link:hover,
 .instr-nav-link.active {
     background: rgba(255,255,255,0.12);
@@ -499,6 +507,10 @@ h3 {
     gap: 0.25rem;
     border-top: 1px solid rgba(255,255,255,0.1);
     padding-top: 1rem;
+}
+
+.instr-logout-form {
+    margin: 0;
 }
 
 /* Main content area */
