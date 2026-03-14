@@ -37,6 +37,23 @@ python manage.py runserver
 - Run collectstatic during deployment.
 - Replace the default secret key and allowed hosts before going live.
 
+### Static files on PythonAnywhere
+
+If the Django admin login page looks unstyled in production, the static files are not being served correctly.
+
+Run this on PythonAnywhere inside your virtual environment:
+
+```bash
+python manage.py collectstatic --noinput
+```
+
+Then in the PythonAnywhere web app configuration, add static mappings:
+
+- URL: /static/  Directory: /home/your-pythonanywhere-user/your-project-folder/staticfiles
+- URL: /media/   Directory: /home/your-pythonanywhere-user/your-project-folder/media
+
+After that, reload the web app.
+
 ## Main app structure
 
 - booking.models defines classes and bookings.
