@@ -1,0 +1,91 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if request.LANGUAGE_CODE == 'da' %}Overblik{% else %}Dashboard{% endif %} | Zenia Yoga{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+
+{% block content %}
+<div class="instr-page-header">
+    <div>
+        <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Overblik{% else %}Overview{% endif %}</p>
+        <h1>{% if request.LANGUAGE_CODE == 'da' %}Overblik{% else %}Dashboard{% endif %}</h1>
+    </div>
+    <a class="button-primary" href="{% url 'instructor:class_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Nyt hold{% else %}+ New class{% endif %}</a>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-card">
+        <p class="stat-label">{% if request.LANGUAGE_CODE == 'da' %}Hold i alt{% else %}Total classes{% endif %}</p>
+        <p class="stat-value">{{ total_classes }}</p>
+    </div>
+    <div class="stat-card">
+        <p class="stat-label">{% if request.LANGUAGE_CODE == 'da' %}Kommende{% else %}Upcoming{% endif %}</p>
+        <p class="stat-value">{{ upcoming_count }}</p>
+    </div>
+    <div class="stat-card">
+        <p class="stat-label">{% if request.LANGUAGE_CODE == 'da' %}Bookinger i alt{% else %}Total bookings{% endif %}</p>
+        <p class="stat-value">{{ total_bookings }}</p>
+    </div>
+</div>
+
+{% if upcoming %}
+<section class="instr-section">
+    <h2>{% if request.LANGUAGE_CODE == 'da' %}Kommende hold{% else %}Upcoming classes{% endif %}</h2>
+    <table class="instr-table">
+        <thead>
+            <tr>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Hold{% else %}Class{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Dato &amp; tid{% else %}Date &amp; time{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Underviser{% else %}Instructor{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Bookinger{% else %}Bookings{% endif %}</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in upcoming %}
+            <tr>
+                <td><a class="table-link" href="{% url 'instructor:class_detail' c.pk %}">{{ c.title }}</a></td>
+                <td>{{ c.start_time|date:'D d M, H:i' }}</td>
+                <td>{{ c.instructor_name }}</td>
+                <td>{{ c.booked_count }} / {{ c.capacity }}</td>
+                <td>
+                    <span class="pill {% if c.is_published %}pill-green{% else %}pill-grey{% endif %}">
+                        {% if c.is_published %}{% if request.LANGUAGE_CODE == 'da' %}Udgivet{% else %}Published{% endif %}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Kladde{% else %}Draft{% endif %}{% endif %}
+                    </span>
+                </td>
+                <td><a class="table-link" href="{% url 'instructor:class_detail' c.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Administrer →{% else %}Manage →{% endif %}</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+{% if past %}
+<section class="instr-section">
+    <h2>{% if request.LANGUAGE_CODE == 'da' %}Tidligere hold{% else %}Past classes{% endif %}</h2>
+    <table class="instr-table">
+        <thead>
+            <tr>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Hold{% else %}Class{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Dato &amp; tid{% else %}Date &amp; time{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Underviser{% else %}Instructor{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Bookinger{% else %}Bookings{% endif %}</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in past %}
+            <tr>
+                <td><a class="table-link" href="{% url 'instructor:class_detail' c.pk %}">{{ c.title }}</a></td>
+                <td>{{ c.start_time|date:'D d M, H:i' }}</td>
+                <td>{{ c.instructor_name }}</td>
+                <td>{{ c.booked_count }} / {{ c.capacity }}</td>
+                <td><a class="table-link" href="{% url 'instructor:class_detail' c.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Vis →{% else %}View →{% endif %}</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+{% endblock %}

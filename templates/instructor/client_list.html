@@ -1,0 +1,193 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if request.LANGUAGE_CODE == 'da' %}Deltagere{% else %}Clients{% endif %} | Zenia Yoga{% endblock %}
+{% block nav_clients %}active{% endblock %}
+
+{% block content %}
+<div class="instr-page-header">
+    <div>
+        <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Administration{% else %}Management{% endif %}</p>
+        <h1>{% if request.LANGUAGE_CODE == 'da' %}Deltagere{% else %}Clients{% endif %}</h1>
+    </div>
+    <div class="client-header-actions">
+        <form method="post" action="{% url 'instructor:send_sms_reminders' %}">
+            {% csrf_token %}
+            <button class="button-primary" type="submit">{% if request.LANGUAGE_CODE == 'da' %}Send SMS-påmindelser{% else %}Send SMS reminders{% endif %}</button>
+        </form>
+        <a class="button-secondary" href="{% url 'instructor:export_sms_reminders' %}">{% if request.LANGUAGE_CODE == 'da' %}Eksporter SMS-påmindelser{% else %}Export SMS reminders{% endif %}</a>
+        <div class="stat-card">
+            <p class="stat-label">{% if request.LANGUAGE_CODE == 'da' %}I alt{% else %}Total{% endif %}</p>
+            <p class="stat-value">{{ client_count }}</p>
+        </div>
+    </div>
+</div>
+
+<section class="instr-section">
+    <div class="instr-card client-form-card">
+        <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Manuel oprettelse{% else %}Manual entry{% endif %}</p>
+        <h2>{% if request.LANGUAGE_CODE == 'da' %}Tilføj klient til påmindelser{% else %}Add client for reminders{% endif %}</h2>
+
+        <form method="post" class="client-form-grid">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+                <div class="form-errors">{{ form.non_field_errors }}</div>
+            {% endif %}
+
+            <div class="form-row">
+                <label for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+                {{ form.name }}
+                {% if form.name.errors %}<div class="field-error">{{ form.name.errors|join:', ' }}</div>{% endif %}
+            </div>
+
+            <div class="form-row">
+                <label for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
+                {{ form.email }}
+                {% if form.email.errors %}<div class="field-error">{{ form.email.errors|join:', ' }}</div>{% endif %}
+            </div>
+
+            <div class="form-row">
+                <label for="{{ form.phone.id_for_label }}">{{ form.phone.label }}</label>
+                {{ form.phone }}
+                {% if form.phone.errors %}<div class="field-error">{{ form.phone.errors|join:', ' }}</div>{% endif %}
+            </div>
+
+            <div class="form-row">
+                <label for="{{ form.reminder_classes.id_for_label }}">{{ form.reminder_classes.label }}</label>
+                {{ form.reminder_classes }}
+                {% if form.reminder_classes.help_text %}<p class="field-help">{{ form.reminder_classes.help_text }}</p>{% endif %}
+                {% if form.reminder_classes.errors %}<div class="field-error">{{ form.reminder_classes.errors|join:', ' }}</div>{% endif %}
+            </div>
+
+            <div class="instr-form-actions">
+                <button class="button-primary" type="submit">{% if request.LANGUAGE_CODE == 'da' %}Gem klient{% else %}Save client{% endif %}</button>
+            </div>
+        </form>
+    </div>
+</section>
+
+{% if recent_sms_logs %}
+<section class="instr-section">
+    <div class="instr-card">
+        <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}SMS-log{% else %}SMS log{% endif %}</p>
+        <h2>{% if request.LANGUAGE_CODE == 'da' %}Seneste leveringer{% else %}Recent deliveries{% endif %}</h2>
+        <table class="instr-table instr-table-compact">
+            <thead>
+                <tr>
+                    <th>{% if request.LANGUAGE_CODE == 'da' %}Tid{% else %}Time{% endif %}</th>
+                    <th>{% if request.LANGUAGE_CODE == 'da' %}Klient{% else %}Client{% endif %}</th>
+                    <th>{% if request.LANGUAGE_CODE == 'da' %}Telefon{% else %}Phone{% endif %}</th>
+                    <th>{% if request.LANGUAGE_CODE == 'da' %}Hold{% else %}Class{% endif %}</th>
+                    <th>{% if request.LANGUAGE_CODE == 'da' %}Status{% else %}Status{% endif %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in recent_sms_logs %}
+                <tr>
+                    <td>{{ log.created_at|date:'d M, H:i' }}</td>
+                    <td>
+                        <strong>{{ log.client_name }}</strong>
+                        <p class="client-email">{{ log.client_email }}</p>
+                    </td>
+                    <td>{{ log.normalized_phone|default:log.raw_phone }}</td>
+                    <td>
+                        {% if log.yoga_class_id %}
+                            <a class="table-link" href="{% url 'instructor:class_detail' log.yoga_class_id %}">{{ log.class_title }}</a>
+                        {% else %}
+                            {{ log.class_title }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if log.status == 'sent' %}
+                            <span class="pill pill-green">{% if request.LANGUAGE_CODE == 'da' %}Sendt{% else %}Sent{% endif %}</span>
+                        {% elif log.status == 'failed' %}
+                            <span class="pill pill-red">{% if request.LANGUAGE_CODE == 'da' %}Fejl{% else %}Failed{% endif %}</span>
+                            {% if log.gateway_error %}<p class="client-email">{{ log.gateway_error }}</p>{% endif %}
+                        {% else %}
+                            <span class="pill pill-grey">{{ log.status }}</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+{% if clients %}
+<section class="instr-section">
+    <table class="instr-table">
+        <thead>
+            <tr>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Navn{% else %}Name{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Telefon{% else %}Phone{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Deltager på hold{% else %}Participates in classes{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Påmindelse om hold{% else %}Reminder classes{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Handlinger{% else %}Actions{% endif %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for client in clients %}
+            <tr>
+                <td>
+                    <strong>{{ client.name }}</strong>
+                    <p class="client-email">{{ client.email }}</p>
+                </td>
+                <td>
+                    {% if client.phone %}
+                        {{ client.phone }}
+                    {% else %}
+                        <span class="client-phone-empty">{% if request.LANGUAGE_CODE == 'da' %}Ikke angivet{% else %}Not provided{% endif %}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <ul class="client-classes">
+                        {% for yoga_class in client.classes %}
+                        <li>
+                            <a class="table-link" href="{% url 'instructor:class_detail' yoga_class.pk %}">
+                                {{ yoga_class.title }} - {{ yoga_class.start_time|date:'D d M, H:i' }}
+                            </a>
+                        </li>
+                        {% endfor %}
+                        {% if not client.classes %}
+                        <li class="client-phone-empty">{% if request.LANGUAGE_CODE == 'da' %}Ingen bookinger endnu{% else %}No bookings yet{% endif %}</li>
+                        {% endif %}
+                    </ul>
+                </td>
+                <td>
+                    <ul class="client-classes">
+                        {% for yoga_class in client.reminder_classes %}
+                        <li>
+                            <a class="table-link" href="{% url 'instructor:class_detail' yoga_class.pk %}">
+                                {{ yoga_class.title }} - {{ yoga_class.start_time|date:'D d M, H:i' }}
+                            </a>
+                        </li>
+                        {% endfor %}
+                        {% if not client.reminder_classes %}
+                        <li class="client-phone-empty">{% if request.LANGUAGE_CODE == 'da' %}Ingen valgte hold{% else %}No selected classes{% endif %}</li>
+                        {% endif %}
+                    </ul>
+                </td>
+                <td>
+                    {% if client.client_id %}
+                    <div class="client-actions">
+                        <a class="button-secondary button-compact" href="{% url 'instructor:client_edit' client.client_id %}">{% if request.LANGUAGE_CODE == 'da' %}Rediger{% else %}Edit{% endif %}</a>
+                        <a class="button-secondary button-danger button-compact" href="{% url 'instructor:client_delete' client.client_id %}">{% if request.LANGUAGE_CODE == 'da' %}Slet{% else %}Delete{% endif %}</a>
+                    </div>
+                    {% else %}
+                    <span class="client-phone-empty">{% if request.LANGUAGE_CODE == 'da' %}Kun booking{% else %}Booking only{% endif %}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% else %}
+<div class="empty-state">
+    <h3>{% if request.LANGUAGE_CODE == 'da' %}Ingen deltagere endnu{% else %}No clients yet{% endif %}</h3>
+    <p>{% if request.LANGUAGE_CODE == 'da' %}Når deltagere booker hold, vises de automatisk her.{% else %}Clients will appear here automatically when they book a class.{% endif %}</p>
+</div>
+{% endif %}
+{% endblock %}

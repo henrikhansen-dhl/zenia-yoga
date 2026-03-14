@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if request.LANGUAGE_CODE == 'da' %}Rediger klient{% else %}Edit client{% endif %} | Zenia Yoga{% endblock %}
+{% block nav_clients %}active{% endblock %}
+
+{% block content %}
+<div class="instr-page-header">
+    <div>
+        <a class="back-link" href="{% url 'instructor:client_list' %}">← {% if request.LANGUAGE_CODE == 'da' %}Deltagere{% else %}Clients{% endif %}</a>
+        <h1>{% if request.LANGUAGE_CODE == 'da' %}Rediger klient{% else %}Edit client{% endif %}</h1>
+    </div>
+</div>
+
+<div class="instr-form-wrap">
+    <div class="instr-card client-form-card">
+        <form method="post" class="client-form-grid">
+            {% csrf_token %}
+
+            {% if form.non_field_errors %}
+                <div class="form-errors">{{ form.non_field_errors }}</div>
+            {% endif %}
+
+            <div class="form-row">
+                <label for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+                {{ form.name }}
+                {% if form.name.errors %}<div class="field-error">{{ form.name.errors|join:', ' }}</div>{% endif %}
+            </div>
+
+            <div class="form-row">
+                <label for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
+                {{ form.email }}
+                {% if form.email.errors %}<div class="field-error">{{ form.email.errors|join:', ' }}</div>{% endif %}
+            </div>
+
+            <div class="form-row">
+                <label for="{{ form.phone.id_for_label }}">{{ form.phone.label }}</label>
+                {{ form.phone }}
+                {% if form.phone.errors %}<div class="field-error">{{ form.phone.errors|join:', ' }}</div>{% endif %}
+            </div>
+
+            <div class="form-row">
+                <label for="{{ form.reminder_classes.id_for_label }}">{{ form.reminder_classes.label }}</label>
+                {{ form.reminder_classes }}
+                {% if form.reminder_classes.help_text %}<p class="field-help">{{ form.reminder_classes.help_text }}</p>{% endif %}
+                {% if form.reminder_classes.errors %}<div class="field-error">{{ form.reminder_classes.errors|join:', ' }}</div>{% endif %}
+            </div>
+
+            <div class="instr-form-actions">
+                <button class="button-primary" type="submit">{{ action }}</button>
+                <a class="button-secondary" href="{% url 'instructor:client_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Annuller{% else %}Cancel{% endif %}</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

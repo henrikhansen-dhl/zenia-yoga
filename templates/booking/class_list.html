@@ -1,49 +1,53 @@
-{% extends 'base.html' %}
+{% extends 'base_public.html' %}
 
-{% block title %}Book a Class | Zenia Yoga{% endblock %}
+{% block title %}{% if request.LANGUAGE_CODE == 'da' %}Book et hold{% else %}Book a Class{% endif %} | Zenia Yoga{% endblock %}
 
 {% block content %}
 <section class="hero-card">
     <div class="hero-copy">
-        <p class="eyebrow">A quiet digital studio</p>
-        <h1>Book a yoga class with a calm, phone-first experience.</h1>
+        <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Et roligt digitalt studio{% else %}A quiet digital studio{% endif %}</p>
+        <h1>{% if request.LANGUAGE_CODE == 'da' %}Book yogahold i et enkelt mobilvenligt flow.{% else %}Book a yoga class with a calm, phone-first experience.{% endif %}</h1>
         <p class="hero-text">
-            Zenia Yoga gives your clients a simple way to reserve their place while you manage each class,
-            teacher, schedule, and capacity from the instructor dashboard.
+            {% if request.LANGUAGE_CODE == 'da' %}
+                Zenia Yoga giver dine deltagere en enkel måde at reservere deres plads på, mens du styrer hold,
+                undervisere, tider og kapacitet fra undervisersiden.
+            {% else %}
+                Zenia Yoga gives your clients a simple way to reserve their place while you manage each class,
+                teacher, schedule, and capacity from the instructor dashboard.
+            {% endif %}
         </p>
         <div class="hero-actions">
-            <a class="button-primary" href="#upcoming-classes">See upcoming classes</a>
-            <a class="button-secondary" href="/admin/">Open instructor admin</a>
+            <a class="button-primary" href="#upcoming-classes">{% if request.LANGUAGE_CODE == 'da' %}Se kommende hold{% else %}See upcoming classes{% endif %}</a>
         </div>
     </div>
 
     {% if featured_class %}
         <article class="featured-panel">
-            <p class="eyebrow">Next session</p>
+            <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Næste hold{% else %}Next session{% endif %}</p>
             <h2>{{ featured_class.title }}</h2>
             <p>{{ featured_class.short_description }}</p>
             <dl class="class-facts">
                 <div>
-                    <dt>Teacher</dt>
+                    <dt>{% if request.LANGUAGE_CODE == 'da' %}Underviser{% else %}Teacher{% endif %}</dt>
                     <dd>{{ featured_class.instructor_name }}</dd>
                 </div>
                 <div>
-                    <dt>When</dt>
+                    <dt>{% if request.LANGUAGE_CODE == 'da' %}Hvornår{% else %}When{% endif %}</dt>
                     <dd>{{ featured_class.start_time|date:'D d M, H:i' }}</dd>
                 </div>
                 <div>
-                    <dt>Spots left</dt>
+                    <dt>{% if request.LANGUAGE_CODE == 'da' %}Ledige pladser{% else %}Spots left{% endif %}</dt>
                     <dd>{{ featured_class.spots_left }}</dd>
                 </div>
             </dl>
-            <a class="button-primary" href="{% url 'booking:class_detail' featured_class.pk %}">Reserve a mat</a>
+            <a class="button-primary" href="{% url 'booking:class_detail' featured_class.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Book en plads{% else %}Reserve a mat{% endif %}</a>
         </article>
     {% endif %}
 </section>
 
 <section class="section-heading" id="upcoming-classes">
-    <p class="eyebrow">Upcoming</p>
-    <h2>Classes your clients can book now</h2>
+    <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Kommende{% else %}Upcoming{% endif %}</p>
+    <h2>{% if request.LANGUAGE_CODE == 'da' %}Hold der kan bookes nu{% else %}Classes your clients can book now{% endif %}</h2>
 </section>
 
 <section class="class-grid">
@@ -53,9 +57,9 @@
                 <p class="class-time">{{ yoga_class.start_time|date:'l' }} · {{ yoga_class.start_time|date:'d M, H:i' }}</p>
                 <span class="status-pill {% if yoga_class.spots_left == 0 %}status-full{% endif %}">
                     {% if yoga_class.spots_left == 0 %}
-                        Full
+                        {% if request.LANGUAGE_CODE == 'da' %}Fyldt{% else %}Full{% endif %}
                     {% else %}
-                        {{ yoga_class.spots_left }} spots left
+                        {{ yoga_class.spots_left }} {% if request.LANGUAGE_CODE == 'da' %}ledige pladser{% else %}spots left{% endif %}
                     {% endif %}
                 </span>
             </div>
@@ -65,17 +69,17 @@
 
             <ul class="meta-list">
                 <li>{{ yoga_class.instructor_name }}</li>
-                <li>{% if yoga_class.location %}{{ yoga_class.location }}{% else %}Online or studio{% endif %}</li>
-                <li>{% if yoga_class.focus %}{{ yoga_class.focus }}{% else %}Mindful practice{% endif %}</li>
+                <li>{% if yoga_class.location %}{{ yoga_class.location }}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Online eller i studio{% else %}Online or studio{% endif %}{% endif %}</li>
+                <li>{% if yoga_class.focus %}{{ yoga_class.focus }}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Bevidst praksis{% else %}Mindful practice{% endif %}{% endif %}</li>
             </ul>
 
-            <a class="button-secondary" href="{% url 'booking:class_detail' yoga_class.pk %}">View class</a>
+            <a class="button-secondary" href="{% url 'booking:class_detail' yoga_class.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Se hold{% else %}View class{% endif %}</a>
         </article>
     {% empty %}
         <article class="empty-state">
-            <h3>No classes published yet</h3>
-            <p>Create your first session in the instructor admin and it will appear here automatically.</p>
-            <a class="button-primary" href="/admin/">Go to admin</a>
+            <h3>{% if request.LANGUAGE_CODE == 'da' %}Ingen hold er udgivet endnu{% else %}No classes published yet{% endif %}</h3>
+            <p>{% if request.LANGUAGE_CODE == 'da' %}Opret dit første hold på undervisersiden, så vises det automatisk her.{% else %}Create your first session in the instructor admin and it will appear here automatically.{% endif %}</p>
+            <a class="button-primary" href="/admin/">{% if request.LANGUAGE_CODE == 'da' %}Gå til admin{% else %}Go to admin{% endif %}</a>
         </article>
     {% endfor %}
 </section>

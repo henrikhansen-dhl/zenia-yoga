@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if yoga_class %}{% if request.LANGUAGE_CODE == 'da' %}Rediger{% else %}Edit{% endif %}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Nyt hold{% else %}New class{% endif %}{% endif %} | Zenia Yoga{% endblock %}
+{% block nav_classes %}active{% endblock %}
+
+{% block content %}
+<div class="instr-page-header">
+    <div>
+        {% if yoga_class %}
+            <a class="back-link" href="{% url 'instructor:class_detail' yoga_class.pk %}">← {{ yoga_class.title }}</a>
+            <h1>{% if request.LANGUAGE_CODE == 'da' %}Rediger hold{% else %}Edit class{% endif %}</h1>
+        {% else %}
+            <a class="back-link" href="{% url 'instructor:class_list' %}">← {% if request.LANGUAGE_CODE == 'da' %}Hold{% else %}Classes{% endif %}</a>
+            <h1>{% if request.LANGUAGE_CODE == 'da' %}Nyt hold{% else %}New class{% endif %}</h1>
+        {% endif %}
+    </div>
+</div>
+
+<div class="instr-form-wrap">
+    <form method="post" enctype="multipart/form-data" class="instr-form">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="form-errors">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <fieldset class="instr-fieldset">
+            <legend>{% if request.LANGUAGE_CODE == 'da' %}Grundoplysninger{% else %}Basic info{% endif %}</legend>
+            <div class="form-row">
+                <label for="{{ form.title.id_for_label }}">{{ form.title.label }}</label>
+                {{ form.title }}
+                {% if form.title.errors %}<div class="field-error">{{ form.title.errors|join:', ' }}</div>{% endif %}
+            </div>
+            <div class="form-row">
+                <label for="{{ form.short_description.id_for_label }}">{{ form.short_description.label }}</label>
+                {{ form.short_description }}
+                {% if form.short_description.errors %}<div class="field-error">{{ form.short_description.errors|join:', ' }}</div>{% endif %}
+            </div>
+            <div class="form-row">
+                <label for="{{ form.description.id_for_label }}">{{ form.description.label }}</label>
+                {{ form.description }}
+                {% if form.description.errors %}<div class="field-error">{{ form.description.errors|join:', ' }}</div>{% endif %}
+            </div>
+            <div class="form-row">
+                <label for="{{ form.instructor_name.id_for_label }}">{{ form.instructor_name.label }}</label>
+                {{ form.instructor_name }}
+                {% if form.instructor_name.errors %}<div class="field-error">{{ form.instructor_name.errors|join:', ' }}</div>{% endif %}
+            </div>
+        </fieldset>
+
+        <fieldset class="instr-fieldset">
+            <legend>{% if request.LANGUAGE_CODE == 'da' %}Tid og kapacitet{% else %}Schedule &amp; capacity{% endif %}</legend>
+            <div class="form-row">
+                <label>{{ form.start_time.label }}</label>
+                <div class="split-field-grid">
+                    {% for widget in form.start_time.subwidgets %}
+                    <div class="split-field-part">
+                        <span class="split-field-label">{% if forloop.first %}{% if request.LANGUAGE_CODE == 'da' %}Dato{% else %}Date{% endif %}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Tid{% else %}Time{% endif %}{% endif %}</span>
+                        {{ widget }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% if form.start_time.errors %}<div class="field-error">{{ form.start_time.errors|join:', ' }}</div>{% endif %}
+            </div>
+            <div class="form-row">
+                <label>{{ form.end_time.label }}</label>
+                <div class="split-field-grid">
+                    {% for widget in form.end_time.subwidgets %}
+                    <div class="split-field-part">
+                        <span class="split-field-label">{% if forloop.first %}{% if request.LANGUAGE_CODE == 'da' %}Dato{% else %}Date{% endif %}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Tid{% else %}Time{% endif %}{% endif %}</span>
+                        {{ widget }}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% if form.end_time.errors %}<div class="field-error">{{ form.end_time.errors|join:', ' }}</div>{% endif %}
+            </div>
+            <div class="form-row">
+                <label for="{{ form.capacity.id_for_label }}">{{ form.capacity.label }}</label>
+                {{ form.capacity }}
+                {% if form.capacity.errors %}<div class="field-error">{{ form.capacity.errors|join:', ' }}</div>{% endif %}
+            </div>
+        </fieldset>
+
+        <fieldset class="instr-fieldset">
+            <legend>{% if request.LANGUAGE_CODE == 'da' %}Detaljer{% else %}Details{% endif %}</legend>
+            <div class="form-row">
+                <label for="{{ form.location.id_for_label }}">{{ form.location.label }}</label>
+                {{ form.location }}
+                {% if form.location.errors %}<div class="field-error">{{ form.location.errors|join:', ' }}</div>{% endif %}
+            </div>
+            <div class="form-row">
+                <label for="{{ form.focus.id_for_label }}">{{ form.focus.label }}</label>
+                {{ form.focus }}
+                {% if form.focus.errors %}<div class="field-error">{{ form.focus.errors|join:', ' }}</div>{% endif %}
+            </div>
+            <div class="form-row">
+                <label for="{{ form.cover_image.id_for_label }}">{{ form.cover_image.label }}</label>
+                {{ form.cover_image }}
+                {% if form.cover_image.errors %}<div class="field-error">{{ form.cover_image.errors|join:', ' }}</div>{% endif %}
+            </div>
+        </fieldset>
+
+        <fieldset class="instr-fieldset">
+            <legend>{% if request.LANGUAGE_CODE == 'da' %}Synlighed{% else %}Visibility{% endif %}</legend>
+            <div class="form-row form-row-checkbox">
+                {{ form.is_weekly_recurring }}
+                <label for="{{ form.is_weekly_recurring.id_for_label }}">{{ form.is_weekly_recurring.label }}</label>
+            </div>
+            {% if form.is_weekly_recurring.help_text %}<p class="field-help">{{ form.is_weekly_recurring.help_text }}</p>{% endif %}
+            <div class="form-row form-row-checkbox">
+                {{ form.is_published }}
+                <label for="{{ form.is_published.id_for_label }}">{{ form.is_published.label }}</label>
+            </div>
+            {% if form.is_published.help_text %}<p class="field-help">{{ form.is_published.help_text }}</p>{% endif %}
+        </fieldset>
+
+        <div class="instr-form-actions">
+            <button class="button-primary" type="submit">{{ action }}</button>
+            {% if yoga_class %}
+                <a class="button-secondary" href="{% url 'instructor:class_detail' yoga_class.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Annuller{% else %}Cancel{% endif %}</a>
+            {% else %}
+                <a class="button-secondary" href="{% url 'instructor:class_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Annuller{% else %}Cancel{% endif %}</a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+{% endblock %}

@@ -1,11 +1,11 @@
-{% extends 'base.html' %}
+{% extends 'base_public.html' %}
 
 {% block title %}{{ yoga_class.title }} | Zenia Yoga{% endblock %}
 
 {% block content %}
 <section class="detail-grid">
     <article class="detail-card">
-        <p class="eyebrow">Class details</p>
+        <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Holddetaljer{% else %}Class details{% endif %}</p>
         <h1>{{ yoga_class.title }}</h1>
         <p class="hero-text">{{ yoga_class.short_description }}</p>
 
@@ -15,26 +15,26 @@
 
         <div class="detail-stack">
             <div class="detail-item">
-                <span class="detail-label">Instructor</span>
+                <span class="detail-label">{% if request.LANGUAGE_CODE == 'da' %}Underviser{% else %}Instructor{% endif %}</span>
                 <strong>{{ yoga_class.instructor_name }}</strong>
             </div>
             <div class="detail-item">
-                <span class="detail-label">Schedule</span>
-                <strong>{{ yoga_class.start_time|date:'l d M Y, H:i' }} to {{ yoga_class.end_time|date:'H:i' }}</strong>
+                <span class="detail-label">{% if request.LANGUAGE_CODE == 'da' %}Tidspunkt{% else %}Schedule{% endif %}</span>
+                <strong>{{ yoga_class.start_time|date:'l d M Y, H:i' }} {% if request.LANGUAGE_CODE == 'da' %}til{% else %}to{% endif %} {{ yoga_class.end_time|date:'H:i' }}</strong>
             </div>
             <div class="detail-item">
-                <span class="detail-label">Location</span>
-                <strong>{% if yoga_class.location %}{{ yoga_class.location }}{% else %}Shared during confirmation{% endif %}</strong>
+                <span class="detail-label">{% if request.LANGUAGE_CODE == 'da' %}Sted{% else %}Location{% endif %}</span>
+                <strong>{% if yoga_class.location %}{{ yoga_class.location }}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Delt ved bekræftelse{% else %}Shared during confirmation{% endif %}{% endif %}</strong>
             </div>
             <div class="detail-item">
-                <span class="detail-label">Focus</span>
-                <strong>{% if yoga_class.focus %}{{ yoga_class.focus }}{% else %}Gentle mindful flow{% endif %}</strong>
+                <span class="detail-label">{% if request.LANGUAGE_CODE == 'da' %}Fokus{% else %}Focus{% endif %}</span>
+                <strong>{% if yoga_class.focus %}{{ yoga_class.focus }}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Rolig bevidst flow{% else %}Gentle mindful flow{% endif %}{% endif %}</strong>
             </div>
         </div>
 
         {% if yoga_class.description %}
             <div class="story-block">
-                <p class="eyebrow">What to expect</p>
+                <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Det kan du forvente{% else %}What to expect{% endif %}</p>
                 <p>{{ yoga_class.description|linebreaksbr }}</p>
             </div>
         {% endif %}
@@ -42,8 +42,8 @@
 
     <aside class="booking-card">
         <div class="booking-header">
-            <p class="eyebrow">Reserve your place</p>
-            <h2>{{ yoga_class.spots_left }} spots left</h2>
+            <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Book din plads{% else %}Reserve your place{% endif %}</p>
+            <h2>{{ yoga_class.spots_left }} {% if request.LANGUAGE_CODE == 'da' %}ledige pladser{% else %}spots left{% endif %}</h2>
         </div>
 
         {% if yoga_class.is_bookable %}
@@ -64,13 +64,13 @@
                     </div>
                 {% endfor %}
 
-                <button class="button-primary button-full" type="submit">Confirm booking</button>
+                <button class="button-primary button-full" type="submit">{% if request.LANGUAGE_CODE == 'da' %}Bekræft booking{% else %}Confirm booking{% endif %}</button>
             </form>
         {% else %}
             <div class="empty-state compact">
-                <h3>Booking closed</h3>
-                <p>This class is either full or has already started. Please choose another session.</p>
-                <a class="button-secondary" href="{% url 'booking:class_list' %}">Back to all classes</a>
+                <h3>{% if request.LANGUAGE_CODE == 'da' %}Booking lukket{% else %}Booking closed{% endif %}</h3>
+                <p>{% if request.LANGUAGE_CODE == 'da' %}Dette hold er enten fyldt eller allerede startet. Vælg venligst et andet hold.{% else %}This class is either full or has already started. Please choose another session.{% endif %}</p>
+                <a class="button-secondary" href="{% url 'booking:class_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Tilbage til alle hold{% else %}Back to all classes{% endif %}</a>
             </div>
         {% endif %}
     </aside>

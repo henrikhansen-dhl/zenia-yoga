@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if request.LANGUAGE_CODE == 'da' %}Slet{% else %}Delete{% endif %} | Zenia Yoga{% endblock %}
+
+{% block content %}
+<div class="instr-page-header">
+    <h1>{% if request.LANGUAGE_CODE == 'da' %}Slet hold{% else %}Delete class{% endif %}</h1>
+</div>
+
+<div class="instr-form-wrap">
+    <div class="instr-card instr-confirm-card">
+        <h2>{% if request.LANGUAGE_CODE == 'da' %}Er du sikker?{% else %}Are you sure?{% endif %}</h2>
+        <p>{% if request.LANGUAGE_CODE == 'da' %}Du er ved at slette <strong>"{{ object_name }}"</strong> permanent sammen med alle bookinger. Det kan ikke fortrydes.{% else %}You are about to permanently delete <strong>"{{ object_name }}"</strong> and all its bookings. This cannot be undone.{% endif %}</p>
+
+        <div class="instr-form-actions">
+            <form method="post">
+                {% csrf_token %}
+                <button class="button-primary button-danger-solid" type="submit">{% if request.LANGUAGE_CODE == 'da' %}Ja, slet{% else %}Yes, delete{% endif %}</button>
+            </form>
+            <a class="button-secondary" href="{{ cancel_url }}">{% if request.LANGUAGE_CODE == 'da' %}Annuller{% else %}Cancel{% endif %}</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

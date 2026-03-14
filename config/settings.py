@@ -3,6 +3,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from django.utils.translation import gettext_lazy as _
+
 load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -39,6 +41,8 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'booking.middleware.DefaultLanguageMiddleware',
+    'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -99,9 +103,14 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = os.getenv('DJANGO_LANGUAGE_CODE', 'da')
 
-TIME_ZONE = os.getenv('DJANGO_TIME_ZONE', 'Europe/Paris')
+LANGUAGES = [
+    ('en', _('English')),
+    ('da', _('Danish')),
+]
+
+TIME_ZONE = os.getenv('DJANGO_TIME_ZONE', 'Europe/Copenhagen')
 
 USE_I18N = True
 
@@ -122,3 +131,12 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_URL = 'admin:login'
+
+SMS_GATEWAY_ENABLED = os.getenv('SMS_GATEWAY_ENABLED', 'False').lower() == 'true'
+SMS_GATEWAY_URL = os.getenv('SMS_GATEWAY_URL', 'https://api.cpsms.dk/v2/send')
+SMS_GATEWAY_USERNAME = os.getenv('SMS_GATEWAY_USERNAME', '')
+SMS_GATEWAY_API_KEY = os.getenv('SMS_GATEWAY_API_KEY', '')
+SMS_GATEWAY_FROM = os.getenv('SMS_GATEWAY_FROM', 'ZeniaYoga')
+SMS_GATEWAY_LANGUAGE = os.getenv('SMS_GATEWAY_LANGUAGE', 'da')
+SMS_GATEWAY_DEFAULT_COUNTRY_CODE = os.getenv('SMS_GATEWAY_DEFAULT_COUNTRY_CODE', '45')
+SMS_GATEWAY_TIMEOUT_SECONDS = int(os.getenv('SMS_GATEWAY_TIMEOUT_SECONDS', '15'))

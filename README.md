@@ -42,3 +42,28 @@ python manage.py runserver
 - booking.models defines classes and bookings.
 - booking.admin provides the instructor management interface.
 - booking.views and templates render the public booking flow.
+
+## SMS reminder gateway
+
+- The instructor clients page now supports direct SMS sending via CPSMS.
+- Configure gateway credentials in `.env` (see `.env.example`).
+- Required values:
+
+```env
+SMS_GATEWAY_ENABLED=True
+SMS_GATEWAY_USERNAME=your-cpsms-username
+SMS_GATEWAY_API_KEY=your-cpsms-api-key
+SMS_GATEWAY_FROM=ZeniaYoga
+```
+
+- Optional values:
+
+```env
+SMS_GATEWAY_URL=https://api.cpsms.dk/v2/send
+SMS_GATEWAY_LANGUAGE=da
+SMS_GATEWAY_DEFAULT_COUNTRY_CODE=45
+SMS_GATEWAY_TIMEOUT_SECONDS=15
+```
+
+- Use the "Send SMS reminders" button on the instructor clients page to send immediately.
+- Use "Export SMS reminders" if you want CSV output instead of direct send.

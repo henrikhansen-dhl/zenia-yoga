@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+
+{% block title %}{% if request.LANGUAGE_CODE == 'da' %}Slet klient{% else %}Delete client{% endif %} | Zenia Yoga{% endblock %}
+{% block nav_clients %}active{% endblock %}
+
+{% block content %}
+<div class="instr-page-header">
+    <div>
+        <a class="back-link" href="{% url 'instructor:client_list' %}">← {% if request.LANGUAGE_CODE == 'da' %}Deltagere{% else %}Clients{% endif %}</a>
+        <h1>{% if request.LANGUAGE_CODE == 'da' %}Slet klient{% else %}Delete client{% endif %}</h1>
+    </div>
+</div>
+
+<div class="instr-form-wrap">
+    <div class="instr-card instr-confirm-card">
+        <h2>{% if request.LANGUAGE_CODE == 'da' %}Er du sikker?{% else %}Are you sure?{% endif %}</h2>
+        <p>
+            {% if request.LANGUAGE_CODE == 'da' %}
+            Du er ved at slette klienten <strong>{{ client.name }}</strong>. Dette kan ikke fortrydes.
+            {% else %}
+            You are about to delete client <strong>{{ client.name }}</strong>. This cannot be undone.
+            {% endif %}
+        </p>
+
+        <div class="instr-form-actions">
+            <form method="post">
+                {% csrf_token %}
+                <button class="button-primary button-danger-solid" type="submit">{% if request.LANGUAGE_CODE == 'da' %}Ja, slet{% else %}Yes, delete{% endif %}</button>
+            </form>
+            <a class="button-secondary" href="{% url 'instructor:client_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Annuller{% else %}Cancel{% endif %}</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
