@@ -24,7 +24,7 @@ class StudioMembershipInline(admin.TabularInline):
 
 @admin.register(Studio)
 class StudioAdmin(admin.ModelAdmin):
-	list_display = ('name', 'slug', 'contact_email', 'billing_email', 'is_active', 'created_at')
+	list_display = ('name', 'slug', 'logo', 'contact_email', 'billing_email', 'is_active', 'created_at')
 	list_filter = ('is_active',)
 	search_fields = ('name', 'slug', 'contact_name', 'contact_email', 'billing_email')
 	prepopulated_fields = {'slug': ('name',)}

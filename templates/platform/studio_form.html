@@ -11,8 +11,52 @@
     </div>
 </div>
 
+{% if studio %}
+<section class="instr-card studio-public-url-panel">
+    <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Offentlig bookingside{% else %}Public booking page{% endif %}</p>
+    <h2>{{ studio.name }}</h2>
+    <p class="hero-text">
+        {% if request.LANGUAGE_CODE == 'da' %}
+        Del dette link med studiets deltagere. Det peger direkte på studiets egen bookingside.
+        {% else %}
+        Share this link with the studio's clients. It points directly to the studio's own booking page.
+        {% endif %}
+    </p>
+    <div class="studio-public-url-block">
+        <a class="table-link" href="{{ studio.public_booking_path }}" target="_blank" rel="noopener noreferrer">{{ studio.public_booking_url }}</a>
+        <div class="studio-public-url-actions">
+            <a class="button-secondary button-secondary-compact" href="{{ studio.public_booking_path }}" target="_blank" rel="noopener noreferrer">
+                {% if request.LANGUAGE_CODE == 'da' %}Åbn bookingside ↗{% else %}Open booking page ↗{% endif %}
+            </a>
+            <button
+                type="button"
+                class="table-action-button"
+                data-copy-url="{{ studio.public_booking_url }}"
+                data-copy-label-default="{% if request.LANGUAGE_CODE == 'da' %}Kopiér URL{% else %}Copy URL{% endif %}"
+                data-copy-label-success="{% if request.LANGUAGE_CODE == 'da' %}Kopieret{% else %}Copied{% endif %}"
+                data-copy-label-error="{% if request.LANGUAGE_CODE == 'da' %}Kunne ikke kopiere{% else %}Copy failed{% endif %}"
+            >
+                {% if request.LANGUAGE_CODE == 'da' %}Kopiér URL{% else %}Copy URL{% endif %}
+            </button>
+        </div>
+    </div>
+</section>
+{% else %}
+<section class="instr-card studio-public-url-panel">
+    <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Offentlig bookingside{% else %}Public booking page{% endif %}</p>
+    <h2>{% if request.LANGUAGE_CODE == 'da' %}Tilgængelig efter oprettelse{% else %}Available after creation{% endif %}</h2>
+    <p class="hero-text">
+        {% if request.LANGUAGE_CODE == 'da' %}
+        Gem studiet først, så vises den delbare bookingside her med åbne- og kopiér-knapper.
+        {% else %}
+        Save the studio first and the shareable booking page will appear here with open and copy actions.
+        {% endif %}
+    </p>
+</section>
+{% endif %}
+
 <div class="instr-form-wrap">
-    <form method="post" class="instr-form">
+    <form method="post" enctype="multipart/form-data" class="instr-form">
         {% csrf_token %}
 
         {% if form.non_field_errors %}
@@ -30,6 +74,17 @@
                 <label for="{{ form.slug.id_for_label }}">{{ form.slug.label }}</label>
                 {{ form.slug }}
                 {% if form.slug.errors %}<div class="field-error">{{ form.slug.errors|join:', ' }}</div>{% endif %}
+            </div>
+            <div class="form-row">
+                <label for="{{ form.logo.id_for_label }}">{{ form.logo.label }}</label>
+                {{ form.logo }}
+                {% if form.logo.help_text %}<p class="field-help">{{ form.logo.help_text }}</p>{% endif %}
+                {% if studio and studio.logo %}
+                <div class="studio-logo-preview-wrap">
+                    <img class="studio-logo-preview" src="{{ studio.logo.url }}" alt="{{ studio.name }} logo">
+                </div>
+                {% endif %}
+                {% if form.logo.errors %}<div class="field-error">{{ form.logo.errors|join:', ' }}</div>{% endif %}
             </div>
             <div class="form-row">
                 <label for="{{ form.contact_name.id_for_label }}">{{ form.contact_name.label }}</label>
@@ -78,4 +133,44 @@
         </div>
     </form>
 </div>
+
+{% if studio %}
+<script>
+document.addEventListener('click', async function(event) {
+    const button = event.target.closest('[data-copy-url]');
+    if (!button) {
+        return;
+    }
+
+    const text = button.getAttribute('data-copy-url');
+    const defaultLabel = button.getAttribute('data-copy-label-default');
+    const successLabel = button.getAttribute('data-copy-label-success');
+    const errorLabel = button.getAttribute('data-copy-label-error');
+
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+        } else {
+            const input = document.createElement('textarea');
+            input.value = text;
+            input.setAttribute('readonly', 'readonly');
+            input.style.position = 'absolute';
+            input.style.left = '-9999px';
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            document.body.removeChild(input);
+        }
+
+        button.textContent = successLabel;
+    } catch (error) {
+        button.textContent = errorLabel;
+    }
+
+    window.setTimeout(function() {
+        button.textContent = defaultLabel;
+    }, 1800);
+});
+</script>
+{% endif %}
 {% endblock %}

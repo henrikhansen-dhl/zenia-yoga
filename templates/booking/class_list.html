@@ -1,6 +1,6 @@
 {% extends 'base_public.html' %}
 
-{% block title %}{% if request.LANGUAGE_CODE == 'da' %}Book et hold{% else %}Book a Class{% endif %} | Yoga Studio Platform{% endblock %}
+{% block title %}{% if request.LANGUAGE_CODE == 'da' %}Book et hold{% else %}Book a Class{% endif %} | {{ studio.name }}{% endblock %}
 
 {% block content %}
 <section class="hero-card">
@@ -40,7 +40,7 @@
                     <dd>{{ featured_class.spots_left }}</dd>
                 </div>
             </dl>
-            <a class="button-primary" href="{% url 'booking:class_detail' featured_class.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Book en plads{% else %}Reserve a mat{% endif %}</a>
+            <a class="button-primary" href="{% url 'booking:class_detail' studio.slug featured_class.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Book en plads{% else %}Reserve a mat{% endif %}</a>
         </article>
     {% endif %}
 </section>
@@ -73,7 +73,7 @@
                 <li>{% if yoga_class.focus %}{{ yoga_class.focus }}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Bevidst praksis{% else %}Mindful practice{% endif %}{% endif %}</li>
             </ul>
 
-            <a class="button-secondary" href="{% url 'booking:class_detail' yoga_class.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Se hold{% else %}View class{% endif %}</a>
+            <a class="button-secondary" href="{% url 'booking:class_detail' studio.slug yoga_class.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Se hold{% else %}View class{% endif %}</a>
         </article>
     {% empty %}
         <article class="empty-state">

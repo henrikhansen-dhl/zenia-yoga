@@ -45,6 +45,7 @@
             <tr>
                 <th>{% if request.LANGUAGE_CODE == 'da' %}Studie{% else %}Studio{% endif %}</th>
                 <th>Slug</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Offentlig URL{% else %}Public URL{% endif %}</th>
                 <th>{% if request.LANGUAGE_CODE == 'da' %}Kontakt{% else %}Contact{% endif %}</th>
                 <th>{% if request.LANGUAGE_CODE == 'da' %}Faktura{% else %}Billing{% endif %}</th>
                 <th>{% if request.LANGUAGE_CODE == 'da' %}Funktioner{% else %}Features{% endif %}</th>
@@ -63,6 +64,28 @@
                     {% endif %}
                 </td>
                 <td>{{ studio.slug }}</td>
+                <td>
+                    <div class="studio-public-url-block">
+                        <a class="table-link" href="{{ studio.public_booking_path }}" target="_blank" rel="noopener noreferrer">
+                            {{ studio.public_booking_url }}
+                        </a>
+                        <div class="studio-public-url-actions">
+                            <a class="table-link" href="{{ studio.public_booking_path }}" target="_blank" rel="noopener noreferrer">
+                                {% if request.LANGUAGE_CODE == 'da' %}Åbn ↗{% else %}Open ↗{% endif %}
+                            </a>
+                            <button
+                                type="button"
+                                class="table-action-button"
+                                data-copy-url="{{ studio.public_booking_url }}"
+                                data-copy-label-default="{% if request.LANGUAGE_CODE == 'da' %}Kopiér URL{% else %}Copy URL{% endif %}"
+                                data-copy-label-success="{% if request.LANGUAGE_CODE == 'da' %}Kopieret{% else %}Copied{% endif %}"
+                                data-copy-label-error="{% if request.LANGUAGE_CODE == 'da' %}Kunne ikke kopiere{% else %}Copy failed{% endif %}"
+                            >
+                                {% if request.LANGUAGE_CODE == 'da' %}Kopiér URL{% else %}Copy URL{% endif %}
+                            </button>
+                        </div>
+                    </div>
+                </td>
                 <td>
                     {% if studio.contact_name %}{{ studio.contact_name }}<br>{% endif %}
                     {% if studio.contact_email %}<span class="client-email">{{ studio.contact_email }}</span>{% else %}—{% endif %}
@@ -98,4 +121,42 @@
     <a class="button-primary" href="{% url 'platform:studio_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Nyt studie{% else %}+ New studio{% endif %}</a>
 </div>
 {% endif %}
+
+<script>
+document.addEventListener('click', async function(event) {
+    const button = event.target.closest('[data-copy-url]');
+    if (!button) {
+        return;
+    }
+
+    const text = button.getAttribute('data-copy-url');
+    const defaultLabel = button.getAttribute('data-copy-label-default');
+    const successLabel = button.getAttribute('data-copy-label-success');
+    const errorLabel = button.getAttribute('data-copy-label-error');
+
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(text);
+        } else {
+            const input = document.createElement('textarea');
+            input.value = text;
+            input.setAttribute('readonly', 'readonly');
+            input.style.position = 'absolute';
+            input.style.left = '-9999px';
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            document.body.removeChild(input);
+        }
+
+        button.textContent = successLabel;
+    } catch (error) {
+        button.textContent = errorLabel;
+    }
+
+    window.setTimeout(function() {
+        button.textContent = defaultLabel;
+    }, 1800);
+});
+</script>
 {% endblock %}

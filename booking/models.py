@@ -9,6 +9,7 @@ from django.utils import timezone
 class Studio(models.Model):
 	name = models.CharField(max_length=140)
 	slug = models.SlugField(max_length=160, unique=True)
+	logo = models.ImageField(upload_to='studio-logos/', blank=True)
 	contact_name = models.CharField(max_length=120, blank=True)
 	contact_email = models.EmailField(blank=True)
 	contact_phone = models.CharField(max_length=40, blank=True)

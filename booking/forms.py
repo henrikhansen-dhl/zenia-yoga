@@ -310,6 +310,7 @@ class StudioForm(forms.ModelForm):
         fields = [
             'name',
             'slug',
+            'logo',
             'contact_name',
             'contact_email',
             'contact_phone',
@@ -336,6 +337,7 @@ class StudioForm(forms.ModelForm):
         labels = {
             'name': 'Studienavn' if is_danish else 'Studio name',
             'slug': 'Slug' if is_danish else 'Slug',
+            'logo': 'Logo' if is_danish else 'Logo',
             'contact_name': 'Kontaktperson' if is_danish else 'Contact name',
             'contact_email': 'Kontakt e-mail' if is_danish else 'Contact email',
             'contact_phone': 'Kontakttelefon' if is_danish else 'Contact phone',
@@ -368,6 +370,11 @@ class StudioForm(forms.ModelForm):
             'Vælg de funktioner som studiet har adgang til.'
             if is_danish else
             'Choose the functions this studio should have access to.'
+        )
+        self.fields['logo'].help_text = (
+            'Upload et lille logo som vises i instruktørpanelet.'
+            if is_danish else
+            'Upload a small logo shown in the instructor area.'
         )
 
     def save(self, commit=True):

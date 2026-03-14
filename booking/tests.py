@@ -1,10 +1,13 @@
+import tempfile
 from datetime import timedelta
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.test.utils import override_settings
+from django.urls import reverse
 from django.utils import translation
 from django.utils import timezone
 
@@ -26,6 +29,11 @@ class BookingFlowTests(TestCase):
 			location='Studio One',
 			focus='Breath and balance',
 		)
+		self.class_detail_url = reverse(
+			'booking:class_detail',
+			kwargs={'studio_slug': self.yoga_class.studio.slug, 'pk': self.yoga_class.pk},
+		)
+		self.class_list_url = reverse('booking:class_list', kwargs={'studio_slug': self.yoga_class.studio.slug})
 
 	def test_form_rejects_duplicate_email_for_same_class(self):
 		Booking.objects.create(
@@ -64,7 +72,7 @@ class BookingFlowTests(TestCase):
 
 	def test_successful_booking_redirects_to_public_class_list(self):
 		response = self.client.post(
-			f'/classes/{self.yoga_class.pk}/',
+			self.class_detail_url,
 			data={
 				'client_name': 'Asta',
 				'client_email': 'asta@example.com',
@@ -74,7 +82,7 @@ class BookingFlowTests(TestCase):
 		)
 
 		self.assertEqual(response.status_code, 302)
-		self.assertEqual(response.headers['Location'], '/')
+		self.assertEqual(response.headers['Location'], self.class_list_url)
 		self.assertTrue(
 			Booking.objects.filter(
 				yoga_class=self.yoga_class,
@@ -84,7 +92,7 @@ class BookingFlowTests(TestCase):
 
 	def test_successful_booking_shows_prominent_confirmation_on_front_page(self):
 		response = self.client.post(
-			f'/classes/{self.yoga_class.pk}/',
+			self.class_detail_url,
 			data={
 				'client_name': 'Asta',
 				'client_email': 'asta@example.com',
@@ -98,6 +106,23 @@ class BookingFlowTests(TestCase):
 		self.assertContains(response, 'booking-success-banner')
 		self.assertContains(response, 'booking-success-title')
 		self.assertContains(response, 'booking-success-text')
+
+	def test_public_class_list_shows_studio_logo_in_header(self):
+		logo_bytes = (
+			b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00'
+			b'\x00\x00\x00\xff\xff\xff\x21\xf9\x04\x01\x00\x00\x00\x00'
+			b'\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b'
+		)
+		with tempfile.TemporaryDirectory() as media_root:
+			with override_settings(MEDIA_ROOT=media_root):
+				self.yoga_class.studio.logo = SimpleUploadedFile('studio.gif', logo_bytes, content_type='image/gif')
+				self.yoga_class.studio.save()
+
+				response = self.client.get(self.class_list_url)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'public-studio-badge-image')
+		self.assertContains(response, '/media/studio-logos/studio')
 
 
 class WeeklyRecurrenceTests(TestCase):
@@ -136,7 +161,9 @@ class WeeklyRecurrenceTests(TestCase):
 		)
 		root_class.sync_weekly_occurrences(upcoming_limit=2, now=now)
 
-		response = self.client.get('/')
+		response = self.client.get(
+			reverse('booking:class_list', kwargs={'studio_slug': root_class.studio.slug})
+		)
 
 		self.assertEqual(response.status_code, 200)
 		classes = response.context['classes']
@@ -630,6 +657,7 @@ class StudioPlatformTests(TestCase):
 
 		self.assertEqual(response.status_code, 302)
 		studio = Studio.objects.get(slug='north-studio')
+		self.assertEqual(response.headers['Location'], f'/platform/studios/{studio.pk}/edit/')
 		self.assertEqual(studio.name, 'North Studio')
 		self.assertTrue(
 			StudioFeatureAccess.objects.filter(
@@ -638,6 +666,26 @@ class StudioPlatformTests(TestCase):
 				is_enabled=True,
 			).exists()
 		)
+
+	def test_studio_edit_page_shows_public_booking_url(self):
+		self.client.force_login(self.superuser)
+		studio = Studio.objects.create(name='North Studio', slug='north-studio')
+
+		response = self.client.get(f'/platform/studios/{studio.pk}/edit/')
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'http://testserver/studios/north-studio/')
+		self.assertContains(response, 'data-copy-url="http://testserver/studios/north-studio/"', html=False)
+
+	def test_studio_list_shows_public_booking_url_and_copy_action(self):
+		self.client.force_login(self.superuser)
+		studio = Studio.objects.create(name='North Studio', slug='north-studio')
+
+		response = self.client.get('/platform/studios/')
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'http://testserver/studios/north-studio/')
+		self.assertContains(response, 'data-copy-url="http://testserver/studios/north-studio/"', html=False)
 
 	def test_superuser_can_create_studio_membership(self):
 		self.client.force_login(self.superuser)
@@ -699,7 +747,9 @@ class StudioPlatformTests(TestCase):
 			is_published=True,
 		)
 
-		response = self.client.get('/')
+		response = self.client.get(
+			reverse('booking:class_list', kwargs={'studio_slug': default_studio.slug})
+		)
 
 		self.assertEqual(response.status_code, 200)
 		self.assertContains(response, 'Default Studio Flow')
@@ -788,3 +838,21 @@ class InstructorStudioAccessTests(TestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertContains(response, 'Default Flow')
 		self.assertNotContains(response, 'South Flow')
+
+	def test_instructor_sidebar_shows_studio_logo(self):
+		self.client.force_login(self.user)
+		logo_bytes = (
+			b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00'
+			b'\x00\x00\x00\xff\xff\xff\x21\xf9\x04\x01\x00\x00\x00\x00'
+			b'\x2c\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02\x44\x01\x00\x3b'
+		)
+		with tempfile.TemporaryDirectory() as media_root:
+			with override_settings(MEDIA_ROOT=media_root):
+				self.other_studio.logo = SimpleUploadedFile('south.gif', logo_bytes, content_type='image/gif')
+				self.other_studio.save()
+
+				response = self.client.get('/instructor/')
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'studio-badge-image')
+		self.assertContains(response, '/media/studio-logos/south')

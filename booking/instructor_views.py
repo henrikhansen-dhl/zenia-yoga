@@ -59,7 +59,9 @@ def _build_sms_rows(request, now=None):
 
             class_start_local = timezone.localtime(yoga_class.start_time)
             class_start_text = class_start_local.strftime('%d-%m-%Y %H:%M')
-            booking_link = request.build_absolute_uri(reverse('booking:class_detail', args=[yoga_class.pk]))
+            booking_link = request.build_absolute_uri(
+                reverse('booking:class_detail', kwargs={'studio_slug': yoga_class.studio.slug, 'pk': yoga_class.pk})
+            )
 
             sms_da = (
                 f"Hej {client.name}, husk at reservere din plads til {yoga_class.title} "
@@ -120,7 +122,9 @@ def _build_sms_rows(request, now=None):
 
             class_start_local = timezone.localtime(yoga_class.start_time)
             class_start_text = class_start_local.strftime('%d-%m-%Y %H:%M')
-            booking_link = request.build_absolute_uri(reverse('booking:class_detail', args=[yoga_class.pk]))
+            booking_link = request.build_absolute_uri(
+                reverse('booking:class_detail', kwargs={'studio_slug': yoga_class.studio.slug, 'pk': yoga_class.pk})
+            )
 
             sms_da = (
                 f"Hej {participant.name}, holdet {yoga_class.title} er i dag kl. {class_start_local:%H:%M}. "

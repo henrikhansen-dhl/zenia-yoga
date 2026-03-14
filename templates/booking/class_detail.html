@@ -1,6 +1,6 @@
 {% extends 'base_public.html' %}
 
-{% block title %}{{ yoga_class.title }} | Yoga Studio Platform{% endblock %}
+{% block title %}{{ yoga_class.title }} | {{ studio.name }}{% endblock %}
 
 {% block content %}
 <section class="detail-grid">
@@ -70,7 +70,7 @@
             <div class="empty-state compact">
                 <h3>{% if request.LANGUAGE_CODE == 'da' %}Booking lukket{% else %}Booking closed{% endif %}</h3>
                 <p>{% if request.LANGUAGE_CODE == 'da' %}Dette hold er enten fyldt eller allerede startet. Vælg venligst et andet hold.{% else %}This class is either full or has already started. Please choose another session.{% endif %}</p>
-                <a class="button-secondary" href="{% url 'booking:class_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Tilbage til alle hold{% else %}Back to all classes{% endif %}</a>
+                <a class="button-secondary" href="{% url 'booking:class_list' studio.slug %}">{% if request.LANGUAGE_CODE == 'da' %}Tilbage til alle hold{% else %}Back to all classes{% endif %}</a>
             </div>
         {% endif %}
     </aside>

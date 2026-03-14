@@ -8,13 +8,30 @@ from .forms import BookingForm
 from .models import Studio, YogaClass
 
 
-def _public_studio():
+def _public_studio(studio_slug=None):
+	if studio_slug:
+		return get_object_or_404(Studio, slug=studio_slug, is_active=True)
 	return Studio.get_default()
 
 
-def class_list(request):
+def default_class_list_redirect(request):
+	studio = Studio.get_default()
+	return redirect('booking:class_list', studio_slug=studio.slug)
+
+
+def legacy_class_detail_redirect(request, pk):
+	yoga_class = get_object_or_404(
+		YogaClass.objects.select_related('studio'),
+		pk=pk,
+		is_published=True,
+	)
+	return redirect('booking:class_detail', studio_slug=yoga_class.studio.slug, pk=yoga_class.pk)
+
+
+def class_list(request, studio_slug):
 	now = timezone.now()
-	studio = _public_studio()
+	studio = _public_studio(studio_slug)
+	request.studio = studio
 	YogaClass.sync_all_weekly_occurrences(upcoming_limit=2, now=now)
 	classes = [
 		yoga_class
@@ -29,12 +46,14 @@ def class_list(request):
 	context = {
 		'classes': classes,
 		'featured_class': featured_class,
+		'studio': studio,
 	}
 	return render(request, 'booking/class_list.html', context)
 
 
-def class_detail(request, pk):
-	studio = _public_studio()
+def class_detail(request, studio_slug, pk):
+	studio = _public_studio(studio_slug)
+	request.studio = studio
 	YogaClass.sync_all_weekly_occurrences(upcoming_limit=2)
 	yoga_class = get_object_or_404(YogaClass, pk=pk, is_published=True, studio=studio)
 
@@ -52,12 +71,13 @@ def class_detail(request, pk):
 					if is_danish else
 					'Your place is booked. A confirmation is saved in the system.',
 				)
-				return redirect('booking:class_list')
+				return redirect('booking:class_list', studio_slug=studio.slug)
 	else:
 		form = BookingForm(yoga_class=yoga_class)
 
 	context = {
 		'yoga_class': yoga_class,
 		'form': form,
+		'studio': studio,
 	}
 	return render(request, 'booking/class_detail.html', context)

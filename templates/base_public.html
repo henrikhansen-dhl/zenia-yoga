@@ -13,9 +13,24 @@
 <body class="public-body">
     <div class="public-page-shell">
         <header class="site-header">
-            <div>
+            <div class="public-brand-wrap">
+                {% if request.studio %}
+                <div class="public-studio-badge">
+                    {% if request.studio.logo %}
+                    <img class="public-studio-badge-image" src="{{ request.studio.logo.url }}" alt="{{ request.studio.name }} logo">
+                    {% else %}
+                    <div class="public-studio-badge-fallback">{{ request.studio.name|slice:':1'|upper }}</div>
+                    {% endif %}
+                </div>
+                {% endif %}
+                <div>
                 <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Bevidst bevægelse{% else %}Mindful movement{% endif %}</p>
-                <a class="brand" href="{% url 'booking:class_list' %}">Yoga Studio Platform</a>
+                {% if request.studio %}
+                <a class="brand" href="{% url 'booking:class_list' request.studio.slug %}">{{ request.studio.name }}</a>
+                {% else %}
+                <a class="brand" href="{% url 'booking:public_home' %}">Yoga Studio Platform</a>
+                {% endif %}
+                </div>
             </div>
             <form class="language-switcher" action="/i18n/setlang/" method="post">
                 {% csrf_token %}

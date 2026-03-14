@@ -84,7 +84,7 @@
             </ul>
         </div>
         {% endif %}
-        <a class="button-secondary instr-public-link" href="{% url 'booking:class_detail' yoga_class.pk %}" target="_blank">{% if request.LANGUAGE_CODE == 'da' %}Vis på bookingsiden ↗{% else %}View on public site ↗{% endif %}</a>
+        <a class="button-secondary instr-public-link" href="{% url 'booking:class_detail' yoga_class.studio.slug yoga_class.pk %}" target="_blank">{% if request.LANGUAGE_CODE == 'da' %}Vis på bookingsiden ↗{% else %}View on public site ↗{% endif %}</a>
     </section>
 
     <section class="instr-card">

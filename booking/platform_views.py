@@ -1,6 +1,7 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils.translation import get_language
 
 from .forms import FeatureForm, StudioForm, StudioMembershipForm
@@ -9,6 +10,11 @@ from .models import Feature, Studio, StudioMembership
 
 def _msg(english, danish):
     return danish if (get_language() or 'en').startswith('da') else english
+
+def _with_public_booking_url(request, studio):
+    studio.public_booking_path = reverse('booking:class_list', kwargs={'studio_slug': studio.slug})
+    studio.public_booking_url = request.build_absolute_uri(studio.public_booking_path)
+    return studio
 
 
 superuser_required = user_passes_test(
@@ -20,6 +26,8 @@ superuser_required = user_passes_test(
 @superuser_required
 def studio_list(request):
     studios = Studio.objects.prefetch_related('feature_accesses__feature').all()
+    for studio in studios:
+        _with_public_booking_url(request, studio)
     features = Feature.objects.filter(is_active=True).order_by('name')
     context = {
         'studios': studios,
@@ -34,14 +42,14 @@ def studio_list(request):
 @superuser_required
 def studio_create(request):
     if request.method == 'POST':
-        form = StudioForm(request.POST)
+        form = StudioForm(request.POST, request.FILES)
         if form.is_valid():
             studio = form.save()
             messages.success(
                 request,
                 _msg(f'Studio "{studio.name}" has been created.', f'Studiet "{studio.name}" er oprettet.'),
             )
-            return redirect('platform:studio_list')
+            return redirect('platform:studio_edit', pk=studio.pk)
     else:
         form = StudioForm()
 
@@ -54,10 +62,12 @@ def studio_create(request):
 @superuser_required
 def studio_edit(request, pk):
     studio = get_object_or_404(Studio, pk=pk)
+    _with_public_booking_url(request, studio)
     if request.method == 'POST':
-        form = StudioForm(request.POST, instance=studio)
+        form = StudioForm(request.POST, request.FILES, instance=studio)
         if form.is_valid():
             studio = form.save()
+            _with_public_booking_url(request, studio)
             messages.success(
                 request,
                 _msg(f'Studio "{studio.name}" has been updated.', f'Studiet "{studio.name}" er opdateret.'),

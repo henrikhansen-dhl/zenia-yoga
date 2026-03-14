@@ -82,6 +82,35 @@ textarea {
     padding: 1rem 0 1.5rem;
 }
 
+.public-brand-wrap {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+}
+
+.public-studio-badge-image,
+.public-studio-badge-fallback {
+    width: 60px;
+    height: 60px;
+    border-radius: 18px;
+    border: 1px solid rgba(23, 50, 46, 0.1);
+    background: rgba(255, 255, 255, 0.58);
+    box-shadow: 0 12px 26px rgba(23, 50, 46, 0.12);
+}
+
+.public-studio-badge-image {
+    object-fit: cover;
+}
+
+.public-studio-badge-fallback {
+    display: grid;
+    place-items: center;
+    color: var(--forest-deep);
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.7rem;
+    font-weight: 700;
+}
+
 .brand,
 h1,
 h2,
@@ -167,6 +196,11 @@ h3 {
     box-shadow: 0 14px 30px rgba(40, 75, 70, 0.24);
 }
 
+.button-secondary-compact {
+    min-height: 40px;
+    padding: 0.55rem 0.95rem;
+}
+
 .button-full {
     width: 100%;
 }
@@ -225,6 +259,23 @@ h3 {
 .empty-state h3 {
     margin: 0 0 0.75rem;
     font-size: 2rem;
+}
+
+.studio-public-url-panel {
+    margin-bottom: 1.5rem;
+}
+
+.studio-logo-preview-wrap {
+    margin-top: 0.85rem;
+}
+
+.studio-logo-preview {
+    width: 88px;
+    height: 88px;
+    border-radius: 22px;
+    object-fit: cover;
+    border: 1px solid rgba(23, 50, 46, 0.12);
+    box-shadow: 0 12px 24px rgba(23, 50, 46, 0.12);
 }
 
 .class-facts,
@@ -485,6 +536,10 @@ h3 {
         flex-direction: column;
     }
 
+    .public-brand-wrap {
+        align-items: flex-start;
+    }
+
     .class-card-top {
         align-items: flex-start;
         flex-direction: column;
@@ -516,6 +571,33 @@ h3 {
 
 .instr-brand .eyebrow {
     color: rgba(255,255,255,0.5);
+}
+
+.studio-badge {
+    margin-bottom: 0.9rem;
+}
+
+.studio-badge-image,
+.studio-badge-fallback {
+    width: 72px;
+    height: 72px;
+    border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.16);
+    background: rgba(255,255,255,0.08);
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.2);
+}
+
+.studio-badge-image {
+    object-fit: cover;
+}
+
+.studio-badge-fallback {
+    display: grid;
+    place-items: center;
+    color: var(--white);
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2rem;
+    font-weight: 700;
 }
 
 .instr-brand .brand {
@@ -692,6 +774,37 @@ h3 {
 }
 
 .table-link:hover {
+    text-decoration: underline;
+}
+
+.studio-public-url-block {
+    display: grid;
+    gap: 0.35rem;
+    min-width: 15rem;
+}
+
+.studio-public-url-block > .table-link {
+    word-break: break-word;
+}
+
+.studio-public-url-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+}
+
+.table-action-button {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--forest);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.table-action-button:hover {
     text-decoration: underline;
 }
 

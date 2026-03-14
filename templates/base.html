@@ -14,6 +14,15 @@
     <div class="instr-shell">
         <aside class="instr-sidebar">
             <div class="instr-brand">
+                {% if request.studio %}
+                <div class="studio-badge">
+                    {% if request.studio.logo %}
+                    <img class="studio-badge-image" src="{{ request.studio.logo.url }}" alt="{{ request.studio.name }} logo">
+                    {% else %}
+                    <div class="studio-badge-fallback">{{ request.studio.name|slice:':1'|upper }}</div>
+                    {% endif %}
+                </div>
+                {% endif %}
                 <p class="eyebrow">Instructor</p>
                 <a class="brand" href="{% url 'instructor:dashboard' %}">Yoga Studio Platform</a>
                 {% if request.studio %}
@@ -46,10 +55,18 @@
                     <button class="language-button {% if request.LANGUAGE_CODE == 'en' %}is-active{% endif %}" type="submit" name="language" value="en">EN</button>
                     <button class="language-button {% if request.LANGUAGE_CODE == 'da' %}is-active{% endif %}" type="submit" name="language" value="da">DA</button>
                 </form>
-                <a class="instr-nav-link" href="{% url 'booking:class_list' %}">{% if request.LANGUAGE_CODE == 'da' %}← Offentlig side{% else %}← Public site{% endif %}</a>
+                {% if request.studio %}
+                <a class="instr-nav-link" href="{% url 'booking:class_list' request.studio.slug %}">{% if request.LANGUAGE_CODE == 'da' %}← Offentlig side{% else %}← Public site{% endif %}</a>
+                {% else %}
+                <a class="instr-nav-link" href="{% url 'booking:public_home' %}">{% if request.LANGUAGE_CODE == 'da' %}← Offentlig side{% else %}← Public site{% endif %}</a>
+                {% endif %}
                 <form class="instr-logout-form" action="{% url 'admin:logout' %}" method="post">
                     {% csrf_token %}
-                    <input type="hidden" name="next" value="{% url 'booking:class_list' %}">
+                    {% if request.studio %}
+                    <input type="hidden" name="next" value="{% url 'booking:class_list' request.studio.slug %}">
+                    {% else %}
+                    <input type="hidden" name="next" value="{% url 'booking:public_home' %}">
+                    {% endif %}
                     <button class="instr-nav-link instr-nav-button" type="submit">{% if request.LANGUAGE_CODE == 'da' %}Log ud{% else %}Log out{% endif %}</button>
                 </form>
             </div>
