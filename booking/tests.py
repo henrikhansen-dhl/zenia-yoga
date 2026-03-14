@@ -5,9 +5,10 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 from django.test.utils import override_settings
+from django.utils import translation
 from django.utils import timezone
 
-from .forms import BookingForm
+from .forms import BookingForm, YogaClassForm
 from .models import Booking, Client, SmsReminderLog, YogaClass
 
 
@@ -251,6 +252,29 @@ class WeeklyRecurrenceTests(TestCase):
 		self.assertEqual(response.status_code, 302)
 		self.assertEqual(Client.objects.filter(email='mette@example.com').count(), 1)
 		self.assertIn(existing_client, root_class.series_participants.all())
+
+
+class InstructorClassFormTests(TestCase):
+	def test_danish_edit_form_renders_iso_value_for_date_input(self):
+		now = timezone.now() + timedelta(days=2)
+		yoga_class = YogaClass(
+			title='Torsdag aften yoga',
+			short_description='Zen Yoga',
+			description='Beskrivelse',
+			instructor_name='Zenia',
+			start_time=now,
+			end_time=now + timedelta(hours=1),
+			capacity=10,
+		)
+
+		with translation.override('da'):
+			form = YogaClassForm(instance=yoga_class)
+
+		self.assertIn('type="date"', str(form['start_time'].subwidgets[0]))
+		self.assertIn(
+			f'value="{timezone.localtime(now):%Y-%m-%d}"',
+			str(form['start_time'].subwidgets[0]),
+		)
 
 	def test_remove_participant_detaches_from_series(self):
 		user = get_user_model().objects.create_user(

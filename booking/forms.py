@@ -10,13 +10,15 @@ from .models import Booking, Client, YogaClass
 class LocalizedSplitDateTimeWidget(forms.MultiWidget):
     def __init__(self, attrs=None):
         widgets = [
-            forms.DateInput(attrs={'type': 'date'}),
+            forms.DateInput(attrs={'type': 'date'}, format='%Y-%m-%d'),
             forms.TimeInput(attrs={'type': 'time', 'step': 300}, format='%H:%M'),
         ]
         super().__init__(widgets, attrs)
 
     def decompress(self, value):
         if value:
+            if timezone.is_aware(value):
+                value = timezone.localtime(value)
             return [value.date(), value.time().replace(second=0, microsecond=0)]
         return [None, None]
 
