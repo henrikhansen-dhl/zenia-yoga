@@ -79,7 +79,7 @@
         <article class="empty-state">
             <h3>{% if request.LANGUAGE_CODE == 'da' %}Ingen hold er udgivet endnu{% else %}No classes published yet{% endif %}</h3>
             <p>{% if request.LANGUAGE_CODE == 'da' %}Opret dit første hold på undervisersiden, så vises det automatisk her.{% else %}Create your first session in the instructor admin and it will appear here automatically.{% endif %}</p>
-            <a class="button-primary" href="/admin/">{% if request.LANGUAGE_CODE == 'da' %}Gå til admin{% else %}Go to admin{% endif %}</a>
+            <a class="button-primary" href="/admin/">{% if request.LANGUAGE_CODE == 'da' %}Gå til administration{% else %}Go to admin{% endif %}</a>
         </article>
     {% endfor %}
 </section>
