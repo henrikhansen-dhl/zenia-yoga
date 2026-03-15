@@ -42,6 +42,7 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'booking.middleware.DefaultLanguageMiddleware',
+    'booking.middleware.StudioContextMiddleware',
     'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -79,6 +80,12 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
+
+# Route platform models (Studio, Feature, auth…) to 'default' and
+# studio-specific models (YogaClass, Booking, Client, SmsReminderLog) to
+# their individual per-studio databases.  Studio databases are registered
+# dynamically at startup (see booking/apps.py) and on studio creation.
+DATABASE_ROUTERS = ['booking.db_router.StudioDatabaseRouter']
 
 
 # Password validation
@@ -140,3 +147,5 @@ SMS_GATEWAY_FROM = os.getenv('SMS_GATEWAY_FROM', 'YogaStudioPlatform')
 SMS_GATEWAY_LANGUAGE = os.getenv('SMS_GATEWAY_LANGUAGE', 'da')
 SMS_GATEWAY_DEFAULT_COUNTRY_CODE = os.getenv('SMS_GATEWAY_DEFAULT_COUNTRY_CODE', '45')
 SMS_GATEWAY_TIMEOUT_SECONDS = int(os.getenv('SMS_GATEWAY_TIMEOUT_SECONDS', '15'))
+
+STUDIO_AUTO_PROVISION_ON_CREATE = os.getenv('STUDIO_AUTO_PROVISION_ON_CREATE', 'True').lower() == 'true'

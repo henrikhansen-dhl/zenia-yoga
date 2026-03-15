@@ -1,11 +1,13 @@
 from django.contrib import messages
 from django.db import transaction
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.translation import get_language
 
 from .forms import BookingForm
 from .models import Studio, YogaClass
+from .studio_db import STUDIO_DB_PREFIX, activate_studio, register_all_studio_dbs
 
 
 def _public_studio(studio_slug=None):
@@ -20,17 +22,33 @@ def default_class_list_redirect(request):
 
 
 def legacy_class_detail_redirect(request, pk):
-	yoga_class = get_object_or_404(
-		YogaClass.objects.select_related('studio'),
-		pk=pk,
-		is_published=True,
-	)
-	return redirect('booking:class_detail', studio_slug=yoga_class.studio.slug, pk=yoga_class.pk)
+	# Search every registered studio database for this class (legacy URLs
+	# pre-date the per-studio routing, so we don't know which DB to look in).
+	from django.conf import settings
+	register_all_studio_dbs()
+	for alias in list(settings.DATABASES):
+		if not alias.startswith(STUDIO_DB_PREFIX):
+			continue
+		try:
+			yoga_class = (
+				YogaClass.objects.using(alias)
+				.select_related('studio')
+				.get(pk=pk, is_published=True)
+			)
+			return redirect(
+				'booking:class_detail',
+				studio_slug=yoga_class.studio.slug,
+				pk=yoga_class.pk,
+			)
+		except YogaClass.DoesNotExist:
+			continue
+	raise Http404
 
 
 def class_list(request, studio_slug):
 	now = timezone.now()
 	studio = _public_studio(studio_slug)
+	activate_studio(studio)
 	request.studio = studio
 	YogaClass.sync_all_weekly_occurrences(upcoming_limit=2, now=now)
 	classes = [
@@ -53,6 +71,7 @@ def class_list(request, studio_slug):
 
 def class_detail(request, studio_slug, pk):
 	studio = _public_studio(studio_slug)
+	activate_studio(studio)
 	request.studio = studio
 	YogaClass.sync_all_weekly_occurrences(upcoming_limit=2)
 	yoga_class = get_object_or_404(YogaClass, pk=pk, is_published=True, studio=studio)

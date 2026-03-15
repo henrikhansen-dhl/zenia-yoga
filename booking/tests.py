@@ -5,14 +5,17 @@ from unittest.mock import patch
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
-from django.test import TestCase
+from django.test import RequestFactory, SimpleTestCase, TestCase
 from django.test.utils import override_settings
 from django.urls import reverse
 from django.utils import translation
 from django.utils import timezone
 
+from .db_router import StudioDatabaseRouter
+from .middleware import StudioContextMiddleware
 from .forms import BookingForm, YogaClassForm
 from .models import Booking, Client, Feature, SmsReminderLog, Studio, StudioFeatureAccess, StudioMembership, YogaClass
+from .studio_db import deactivate_studio, set_current_studio_alias
 
 
 class BookingFlowTests(TestCase):
@@ -667,6 +670,23 @@ class StudioPlatformTests(TestCase):
 			).exists()
 		)
 
+	def test_studio_create_shows_db_provision_success_message(self):
+		self.client.force_login(self.superuser)
+
+		response = self.client.post('/platform/studios/new/', data={
+			'name': 'West Studio',
+			'slug': 'west-studio',
+			'is_active': 'on',
+		}, follow=True)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertTrue(
+			(
+				'Studio database is ready.' in response.content.decode('utf-8')
+				or 'Studiets database er klargjort.' in response.content.decode('utf-8')
+			)
+		)
+
 	def test_studio_edit_page_shows_public_booking_url(self):
 		self.client.force_login(self.superuser)
 		studio = Studio.objects.create(name='North Studio', slug='north-studio')
@@ -856,3 +876,38 @@ class InstructorStudioAccessTests(TestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertContains(response, 'studio-badge-image')
 		self.assertContains(response, '/media/studio-logos/south')
+
+
+class DatabaseRoutingTests(SimpleTestCase):
+	def test_booking_platform_models_route_to_default(self):
+		router = StudioDatabaseRouter()
+		self.assertEqual(router.db_for_read(Studio), 'default')
+		self.assertEqual(router.db_for_write(Studio), 'default')
+
+	def test_studio_models_route_to_active_studio_alias(self):
+		router = StudioDatabaseRouter()
+		set_current_studio_alias('studio_north_studio')
+		try:
+			self.assertEqual(router.db_for_read(YogaClass), 'studio_north_studio')
+			self.assertEqual(router.db_for_write(Client), 'studio_north_studio')
+		finally:
+			deactivate_studio()
+
+	def test_studio_db_disallows_runpython_and_platform_models(self):
+		router = StudioDatabaseRouter()
+		self.assertFalse(router.allow_migrate('studio_north_studio', 'booking', model_name=None))
+		self.assertFalse(router.allow_migrate('studio_north_studio', 'booking', model_name='studio'))
+		self.assertFalse(router.allow_migrate('studio_north_studio', 'booking', model_name='yogaclass'))
+
+
+class StudioContextMiddlewareTests(SimpleTestCase):
+	def test_middleware_clears_context_after_request(self):
+		request_factory = RequestFactory()
+
+		set_current_studio_alias('studio_temp_studio')
+		self.assertEqual(StudioDatabaseRouter().db_for_read(YogaClass), 'studio_temp_studio')
+
+		middleware = StudioContextMiddleware(lambda request: None)
+		middleware(request_factory.get('/instructor/'))
+
+		self.assertEqual(StudioDatabaseRouter().db_for_read(YogaClass), 'default')

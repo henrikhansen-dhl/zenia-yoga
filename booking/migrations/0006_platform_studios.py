@@ -4,6 +4,17 @@ import django.db.models.deletion
 
 def assign_default_studio(apps, schema_editor):
 	db_alias = schema_editor.connection.alias
+	tables = set(schema_editor.connection.introspection.table_names())
+	required_tables = {
+		'booking_studio',
+		'booking_yogaclass',
+		'booking_client',
+		'booking_booking',
+		'booking_smsreminderlog',
+	}
+	if not required_tables.issubset(tables):
+		return
+
 	Studio = apps.get_model('booking', 'Studio')
 	YogaClass = apps.get_model('booking', 'YogaClass')
 	Client = apps.get_model('booking', 'Client')

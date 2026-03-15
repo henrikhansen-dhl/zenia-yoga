@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test
+from django.conf import settings
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.translation import get_language
@@ -49,6 +50,14 @@ def studio_create(request):
                 request,
                 _msg(f'Studio "{studio.name}" has been created.', f'Studiet "{studio.name}" er oprettet.'),
             )
+            if getattr(settings, 'STUDIO_AUTO_PROVISION_ON_CREATE', True):
+                messages.success(
+                    request,
+                    _msg(
+                        'Studio database is ready.',
+                        'Studiets database er klargjort.',
+                    ),
+                )
             return redirect('platform:studio_edit', pk=studio.pk)
     else:
         form = StudioForm()

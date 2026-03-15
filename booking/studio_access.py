@@ -4,6 +4,7 @@ from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect
 
 from .models import Studio
+from .studio_db import activate_studio
 
 
 def get_accessible_studios(user):
@@ -74,6 +75,7 @@ def studio_login_required(view_func):
             return redirect('/admin/login/?next=' + request.get_full_path())
 
         request.studio = get_request_studio(request)
+        activate_studio(request.studio)
         if not hasattr(request, 'available_studios'):
             request.available_studios = get_accessible_studios(request.user)
         return view_func(request, *args, **kwargs)

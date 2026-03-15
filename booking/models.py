@@ -133,6 +133,7 @@ class YogaClass(models.Model):
 		Studio,
 		on_delete=models.PROTECT,
 		related_name='classes',
+		db_constraint=False,
 	)
 	title = models.CharField(max_length=120)
 	short_description = models.CharField(max_length=180)
@@ -327,6 +328,7 @@ class Client(models.Model):
 		Studio,
 		on_delete=models.PROTECT,
 		related_name='clients',
+		db_constraint=False,
 	)
 	name = models.CharField(max_length=120)
 	email = models.EmailField()
@@ -366,6 +368,7 @@ class SmsReminderLog(models.Model):
 		Studio,
 		on_delete=models.PROTECT,
 		related_name='sms_logs',
+		db_constraint=False,
 	)
 	STATUS_SENT = 'sent'
 	STATUS_FAILED = 'failed'
@@ -416,6 +419,7 @@ class Booking(models.Model):
 		Studio,
 		on_delete=models.PROTECT,
 		related_name='bookings',
+		db_constraint=False,
 	)
 	yoga_class = models.ForeignKey(
 		YogaClass,
