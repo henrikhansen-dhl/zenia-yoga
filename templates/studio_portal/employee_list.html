@@ -1,0 +1,52 @@
+{% extends 'studio_portal/base.html' %}
+
+{% block title %}{% if request.LANGUAGE_CODE == 'da' %}Medarbejdere{% else %}Employees{% endif %} | Yoga Studio Admin{% endblock %}
+{% block nav_employees %}active{% endblock %}
+
+{% block content %}
+<div class="instr-page-header">
+    <div>
+        <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Adgange{% else %}Access{% endif %}</p>
+        <h1>{% if request.LANGUAGE_CODE == 'da' %}Medarbejdere i {{ studio.name }}{% else %}Employees in {{ studio.name }}{% endif %}</h1>
+    </div>
+    <a class="button-primary" href="{% url 'studio_portal:employee_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Ny medarbejder{% else %}+ New employee{% endif %}</a>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-card"><p class="stat-label">{% if request.LANGUAGE_CODE == 'da' %}Adgange i alt{% else %}Total access{% endif %}</p><p class="stat-value">{{ membership_count }}</p></div>
+    <div class="stat-card"><p class="stat-label">{% if request.LANGUAGE_CODE == 'da' %}Aktive{% else %}Active{% endif %}</p><p class="stat-value">{{ active_membership_count }}</p></div>
+</div>
+
+{% if memberships %}
+<section class="instr-section">
+    <table class="instr-table">
+        <thead>
+            <tr>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Bruger{% else %}User{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Rolle{% else %}Role{% endif %}</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for membership in memberships %}
+            <tr>
+                <td>
+                    <strong>{{ membership.user.get_full_name|default:membership.user.username }}</strong>
+                    <div class="client-email">{{ membership.user.email|default:membership.user.username }}</div>
+                </td>
+                <td>{{ membership.get_role_display }}</td>
+                <td><span class="pill {% if membership.is_active %}pill-green{% else %}pill-grey{% endif %}">{% if membership.is_active %}{% if request.LANGUAGE_CODE == 'da' %}Aktiv{% else %}Active{% endif %}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Inaktiv{% else %}Inactive{% endif %}{% endif %}</span></td>
+                <td><a class="table-link" href="{% url 'studio_portal:employee_edit' membership.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Rediger →{% else %}Edit →{% endif %}</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% else %}
+<div class="empty-state">
+    <h3>{% if request.LANGUAGE_CODE == 'da' %}Ingen medarbejdere endnu{% else %}No employees yet{% endif %}</h3>
+    <p>{% if request.LANGUAGE_CODE == 'da' %}Opret login-adgang til medarbejdere og studieledere herfra.{% else %}Create login access for employees and studio managers from here.{% endif %}</p>
+</div>
+{% endif %}
+{% endblock %}

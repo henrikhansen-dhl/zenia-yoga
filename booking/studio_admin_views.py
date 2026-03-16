@@ -1,12 +1,14 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test
 from django.conf import settings
+from django.http import HttpResponsePermanentRedirect
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.translation import get_language
 
 from .forms import FeatureForm, StudioForm, StudioMembershipForm
 from .models import Feature, Studio, StudioMembership
+from .studio_access import studio_login_required
 
 
 def _msg(english, danish):
@@ -24,7 +26,24 @@ superuser_required = user_passes_test(
 )
 
 
+def legacy_studio_admin_redirect(request, subpath=''):
+    target = f'/studio/{subpath}' if subpath else '/studio/'
+    query_string = request.META.get('QUERY_STRING')
+    if query_string:
+        target = f'{target}?{query_string}'
+    return HttpResponsePermanentRedirect(target)
+
+
+def legacy_studios_root_redirect(request):
+    target = '/studio/studios/'
+    query_string = request.META.get('QUERY_STRING')
+    if query_string:
+        target = f'{target}?{query_string}'
+    return HttpResponsePermanentRedirect(target)
+
+
 @superuser_required
+@studio_login_required
 def studio_list(request):
     studios = Studio.objects.prefetch_related('feature_accesses__feature').all()
     for studio in studios:
@@ -37,10 +56,11 @@ def studio_list(request):
         'active_studio_count': studios.filter(is_active=True).count(),
         'feature_count': features.count(),
     }
-    return render(request, 'platform/studio_list.html', context)
+    return render(request, 'studio_admin/studio_list.html', context)
 
 
 @superuser_required
+@studio_login_required
 def studio_create(request):
     if request.method == 'POST':
         form = StudioForm(request.POST, request.FILES)
@@ -58,17 +78,18 @@ def studio_create(request):
                         'Studiets database er klargjort.',
                     ),
                 )
-            return redirect('platform:studio_edit', pk=studio.pk)
+            return redirect('studio_admin:studio_edit', pk=studio.pk)
     else:
         form = StudioForm()
 
-    return render(request, 'platform/studio_form.html', {
+    return render(request, 'studio_admin/studio_form.html', {
         'form': form,
         'action': _msg('Create studio', 'Opret studie'),
     })
 
 
 @superuser_required
+@studio_login_required
 def studio_edit(request, pk):
     studio = get_object_or_404(Studio, pk=pk)
     _with_public_booking_url(request, studio)
@@ -81,11 +102,11 @@ def studio_edit(request, pk):
                 request,
                 _msg(f'Studio "{studio.name}" has been updated.', f'Studiet "{studio.name}" er opdateret.'),
             )
-            return redirect('platform:studio_list')
+            return redirect('studio_admin:studio_list')
     else:
         form = StudioForm(instance=studio)
 
-    return render(request, 'platform/studio_form.html', {
+    return render(request, 'studio_admin/studio_form.html', {
         'form': form,
         'studio': studio,
         'action': _msg('Save changes', 'Gem ændringer'),
@@ -93,16 +114,18 @@ def studio_edit(request, pk):
 
 
 @superuser_required
+@studio_login_required
 def feature_list(request):
     features = Feature.objects.all().order_by('name')
     context = {
         'features': features,
         'active_feature_count': features.filter(is_active=True).count(),
     }
-    return render(request, 'platform/feature_list.html', context)
+    return render(request, 'studio_admin/feature_list.html', context)
 
 
 @superuser_required
+@studio_login_required
 def feature_create(request):
     if request.method == 'POST':
         form = FeatureForm(request.POST)
@@ -112,17 +135,18 @@ def feature_create(request):
                 request,
                 _msg(f'Feature "{feature.name}" has been created.', f'Funktionen "{feature.name}" er oprettet.'),
             )
-            return redirect('platform:feature_list')
+            return redirect('studio_admin:feature_list')
     else:
         form = FeatureForm()
 
-    return render(request, 'platform/feature_form.html', {
+    return render(request, 'studio_admin/feature_form.html', {
         'form': form,
         'action': _msg('Create feature', 'Opret funktion'),
     })
 
 
 @superuser_required
+@studio_login_required
 def feature_edit(request, pk):
     feature = get_object_or_404(Feature, pk=pk)
     if request.method == 'POST':
@@ -133,11 +157,11 @@ def feature_edit(request, pk):
                 request,
                 _msg(f'Feature "{feature.name}" has been updated.', f'Funktionen "{feature.name}" er opdateret.'),
             )
-            return redirect('platform:feature_list')
+            return redirect('studio_admin:feature_list')
     else:
         form = FeatureForm(instance=feature)
 
-    return render(request, 'platform/feature_form.html', {
+    return render(request, 'studio_admin/feature_form.html', {
         'form': form,
         'feature': feature,
         'action': _msg('Save changes', 'Gem ændringer'),
@@ -145,6 +169,7 @@ def feature_edit(request, pk):
 
 
 @superuser_required
+@studio_login_required
 def membership_list(request):
     memberships = StudioMembership.objects.select_related('studio', 'user').all().order_by('studio__name', 'user__username')
     context = {
@@ -152,10 +177,11 @@ def membership_list(request):
         'membership_count': memberships.count(),
         'active_membership_count': memberships.filter(is_active=True).count(),
     }
-    return render(request, 'platform/membership_list.html', context)
+    return render(request, 'studio_admin/membership_list.html', context)
 
 
 @superuser_required
+@studio_login_required
 def membership_create(request):
     if request.method == 'POST':
         form = StudioMembershipForm(request.POST)
@@ -168,17 +194,18 @@ def membership_create(request):
                     f'Adgang for {membership.user.username} er oprettet.',
                 ),
             )
-            return redirect('platform:membership_list')
+            return redirect('studio_admin:membership_list')
     else:
         form = StudioMembershipForm()
 
-    return render(request, 'platform/membership_form.html', {
+    return render(request, 'studio_admin/membership_form.html', {
         'form': form,
         'action': _msg('Create access', 'Opret adgang'),
     })
 
 
 @superuser_required
+@studio_login_required
 def membership_edit(request, pk):
     membership = get_object_or_404(StudioMembership, pk=pk)
     if request.method == 'POST':
@@ -192,11 +219,11 @@ def membership_edit(request, pk):
                     f'Adgang for {membership.user.username} er opdateret.',
                 ),
             )
-            return redirect('platform:membership_list')
+            return redirect('studio_admin:membership_list')
     else:
         form = StudioMembershipForm(instance=membership)
 
-    return render(request, 'platform/membership_form.html', {
+    return render(request, 'studio_admin/membership_form.html', {
         'form': form,
         'membership': membership,
         'action': _msg('Save changes', 'Gem ændringer'),

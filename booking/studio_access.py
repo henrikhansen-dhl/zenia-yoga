@@ -3,8 +3,15 @@ from functools import wraps
 from django.core.exceptions import PermissionDenied
 from django.shortcuts import redirect
 
-from .models import Studio
+from .models import Studio, StudioMembership
 from .studio_db import activate_studio
+
+
+_ROLE_ORDER = {
+    StudioMembership.ROLE_STAFF: 1,
+    StudioMembership.ROLE_MANAGER: 2,
+    StudioMembership.ROLE_OWNER: 3,
+}
 
 
 def get_accessible_studios(user):
@@ -19,12 +26,7 @@ def get_accessible_studios(user):
         memberships__user=user,
         memberships__is_active=True,
     ).distinct().order_by('name')
-
-    if studios.exists():
-        return studios
-
-    default_studio = Studio.get_default()
-    return Studio.objects.filter(pk=default_studio.pk, is_active=True)
+    return studios
 
 
 def get_request_studio(request):
@@ -72,12 +74,48 @@ def studio_login_required(view_func):
     @wraps(view_func)
     def wrapped(request, *args, **kwargs):
         if not request.user.is_authenticated:
-            return redirect('/admin/login/?next=' + request.get_full_path())
+            login_path = '/studio/login/' if request.path.startswith('/studio/') else '/admin/login/'
+            return redirect(login_path + '?next=' + request.get_full_path())
 
         request.studio = get_request_studio(request)
         activate_studio(request.studio)
         if not hasattr(request, 'available_studios'):
             request.available_studios = get_accessible_studios(request.user)
+        if not hasattr(request, 'studio_role'):
+            request.studio_role = get_user_studio_role(request.user, request.studio)
         return view_func(request, *args, **kwargs)
 
     return wrapped
+
+
+def get_user_studio_role(user, studio):
+    if not user.is_authenticated:
+        return None
+    if user.is_superuser:
+        return StudioMembership.ROLE_OWNER
+
+    membership = StudioMembership.objects.filter(
+        studio=studio,
+        user=user,
+        is_active=True,
+    ).first()
+    return membership.role if membership else None
+
+
+def studio_role_required(minimum_role):
+    minimum_rank = _ROLE_ORDER[minimum_role]
+
+    def decorator(view_func):
+        @studio_login_required
+        @wraps(view_func)
+        def wrapped(request, *args, **kwargs):
+            role = get_user_studio_role(request.user, request.studio)
+            if role is None or _ROLE_ORDER.get(role, 0) < minimum_rank:
+                raise PermissionDenied('You do not have permission to manage this studio area.')
+
+            request.studio_role = role
+            return view_func(request, *args, **kwargs)
+
+        return wrapped
+
+    return decorator

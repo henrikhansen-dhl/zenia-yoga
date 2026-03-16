@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Yoga Studio Platform{% endblock %}</title>
+    <title>{% block title %}Yoga Studio Booking{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -28,7 +28,7 @@
                 {% if request.studio %}
                 <a class="brand" href="{% url 'booking:class_list' request.studio.slug %}">{{ request.studio.name }}</a>
                 {% else %}
-                <a class="brand" href="{% url 'booking:public_home' %}">Yoga Studio Platform</a>
+                <a class="brand" href="{% url 'booking:public_home' %}">Yoga Studio Booking</a>
                 {% endif %}
                 </div>
             </div>

@@ -74,12 +74,29 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+_db_engine = os.getenv('DJANGO_DB_ENGINE', 'sqlite').strip().lower()
+
+if _db_engine in ('mysql', 'django.db.backends.mysql'):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.mysql',
+            'NAME': os.getenv('DJANGO_DB_NAME', ''),
+            'USER': os.getenv('DJANGO_DB_USER', ''),
+            'PASSWORD': os.getenv('DJANGO_DB_PASSWORD', ''),
+            'HOST': os.getenv('DJANGO_DB_HOST', '127.0.0.1'),
+            'PORT': os.getenv('DJANGO_DB_PORT', '3306'),
+            'OPTIONS': {
+                'charset': 'utf8mb4',
+            },
+        }
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 # Route platform models (Studio, Feature, auth…) to 'default' and
 # studio-specific models (YogaClass, Booking, Client, SmsReminderLog) to
@@ -138,6 +155,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 LOGIN_URL = 'admin:login'
+LOGIN_REDIRECT_URL = '/studio/'
 
 SMS_GATEWAY_ENABLED = os.getenv('SMS_GATEWAY_ENABLED', 'False').lower() == 'true'
 SMS_GATEWAY_URL = os.getenv('SMS_GATEWAY_URL', 'https://api.cpsms.dk/v2/send')

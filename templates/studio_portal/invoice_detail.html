@@ -1,0 +1,49 @@
+{% extends 'studio_portal/base.html' %}
+
+{% block title %}{{ invoice.invoice_number }} | Yoga Studio Admin{% endblock %}
+{% block nav_invoices %}active{% endblock %}
+
+{% block content %}
+<div class="instr-page-header">
+    <div>
+        <a class="back-link" href="{% url 'studio_portal:invoice_list' %}">← {% if request.LANGUAGE_CODE == 'da' %}Til fakturaer{% else %}Back to invoices{% endif %}</a>
+        <p class="eyebrow">{{ invoice.invoice_number }}</p>
+        <h1>{% if request.LANGUAGE_CODE == 'da' %}Faktura{% else %}Invoice{% endif %}</h1>
+        <p class="hero-text">{{ invoice.period_start }} - {{ invoice.period_end }}</p>
+    </div>
+    <div class="stat-card compact-stat-card">
+        <p class="stat-label">{% if request.LANGUAGE_CODE == 'da' %}I alt{% else %}Total{% endif %}</p>
+        <p class="stat-value">{{ invoice.subtotal_amount }} {{ invoice.currency }}</p>
+    </div>
+</div>
+
+<section class="instr-section">
+    <table class="instr-table">
+        <thead>
+            <tr>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Linje{% else %}Line{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Antal{% else %}Quantity{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Pris{% else %}Unit price{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Linjetotal{% else %}Line total{% endif %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for line in invoice.lines.all %}
+            <tr>
+                <td>{{ line.description }}</td>
+                <td>{{ line.quantity }}</td>
+                <td>{{ line.unit_price }} {{ invoice.currency }}</td>
+                <td>{{ line.line_total }} {{ invoice.currency }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+{% if invoice.notes %}
+<section class="detail-card">
+    <h2>{% if request.LANGUAGE_CODE == 'da' %}Noter{% else %}Notes{% endif %}</h2>
+    <p class="hero-text">{{ invoice.notes }}</p>
+</section>
+{% endif %}
+{% endblock %}

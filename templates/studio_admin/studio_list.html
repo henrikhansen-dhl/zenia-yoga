@@ -1,12 +1,12 @@
-{% extends 'base.html' %}
+{% extends 'studio_portal/base.html' %}
 
-{% block title %}{% if request.LANGUAGE_CODE == 'da' %}Studier{% else %}Studios{% endif %} | Yoga Studio Platform{% endblock %}
-{% block nav_platform %}active{% endblock %}
+{% block title %}{% if request.LANGUAGE_CODE == 'da' %}Studier{% else %}Studios{% endif %} | Yoga Studio Admin{% endblock %}
+{% block nav_admin %}active{% endblock %}
 
 {% block content %}
 <div class="instr-page-header">
     <div>
-        <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Platform{% else %}Platform{% endif %}</p>
+        <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Administration{% else %}Administration{% endif %}</p>
         <h1>{% if request.LANGUAGE_CODE == 'da' %}Studier{% else %}Studios{% endif %}</h1>
         <p class="hero-text">
             {% if request.LANGUAGE_CODE == 'da' %}
@@ -17,9 +17,9 @@
         </p>
     </div>
     <div class="instr-actions">
-        <a class="button-secondary" href="{% url 'platform:feature_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Funktioner{% else %}Features{% endif %}</a>
-        <a class="button-secondary" href="{% url 'platform:membership_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Adgange{% else %}Access{% endif %}</a>
-        <a class="button-primary" href="{% url 'platform:studio_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Nyt studie{% else %}+ New studio{% endif %}</a>
+        <a class="button-secondary" href="{% url 'studio_admin:feature_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Funktioner{% else %}Features{% endif %}</a>
+        <a class="button-secondary" href="{% url 'studio_admin:membership_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Adgange{% else %}Access{% endif %}</a>
+        <a class="button-primary" href="{% url 'studio_admin:studio_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Nyt studie{% else %}+ New studio{% endif %}</a>
     </div>
 </div>
 
@@ -108,7 +108,7 @@
                         {% if studio.is_active %}{% if request.LANGUAGE_CODE == 'da' %}Aktiv{% else %}Active{% endif %}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Inaktiv{% else %}Inactive{% endif %}{% endif %}
                     </span>
                 </td>
-                <td><a class="table-link" href="{% url 'platform:studio_edit' studio.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Rediger →{% else %}Edit →{% endif %}</a></td>
+                <td><a class="table-link" href="{% url 'studio_admin:studio_edit' studio.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Rediger →{% else %}Edit →{% endif %}</a></td>
             </tr>
             {% endfor %}
         </tbody>
@@ -118,7 +118,7 @@
 <div class="empty-state">
     <h3>{% if request.LANGUAGE_CODE == 'da' %}Ingen studier endnu{% else %}No studios yet{% endif %}</h3>
     <p>{% if request.LANGUAGE_CODE == 'da' %}Opret dit første studie for at begynde at administrere kunder og funktioner.{% else %}Create your first studio to start managing customers and feature access.{% endif %}</p>
-    <a class="button-primary" href="{% url 'platform:studio_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Nyt studie{% else %}+ New studio{% endif %}</a>
+    <a class="button-primary" href="{% url 'studio_admin:studio_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Nyt studie{% else %}+ New studio{% endif %}</a>
 </div>
 {% endif %}
 

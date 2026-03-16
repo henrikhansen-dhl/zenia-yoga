@@ -1,0 +1,63 @@
+{% extends 'studio_portal/base.html' %}
+
+{% block title %}{% if request.LANGUAGE_CODE == 'da' %}Studioportal{% else %}Studio portal{% endif %} | Yoga Studio Admin{% endblock %}
+{% block nav_dashboard %}active{% endblock %}
+
+{% block content %}
+<div class="instr-page-header">
+    <div>
+        <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Studioportal{% else %}Studio portal{% endif %}</p>
+        <h1>{{ studio.name }}</h1>
+        <p class="hero-text">{% if request.LANGUAGE_CODE == 'da' %}Skift mellem dine studier, opret medarbejderadgang og hold styr på fakturering fra ét sted.{% else %}Switch between your studios, create employee access, and keep billing in one place.{% endif %}</p>
+    </div>
+    <div class="instr-actions">
+        {% if studio_role == 'owner' or studio_role == 'manager' %}
+        <a class="button-secondary" href="{% url 'studio_portal:employee_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Administrer medarbejdere{% else %}Manage employees{% endif %}</a>
+        <a class="button-primary" href="{% url 'studio_portal:invoice_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Ny faktura{% else %}+ New invoice{% endif %}</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-card"><p class="stat-label">{% if request.LANGUAGE_CODE == 'da' %}Tilgængelige studier{% else %}Accessible studios{% endif %}</p><p class="stat-value">{{ accessible_studio_count }}</p></div>
+    <div class="stat-card"><p class="stat-label">{% if request.LANGUAGE_CODE == 'da' %}Aktive medarbejdere{% else %}Active employees{% endif %}</p><p class="stat-value">{{ employee_count }}</p></div>
+    <div class="stat-card"><p class="stat-label">{% if request.LANGUAGE_CODE == 'da' %}Aktive services{% else %}Enabled services{% endif %}</p><p class="stat-value">{{ feature_count }}</p></div>
+    <div class="stat-card"><p class="stat-label">{% if request.LANGUAGE_CODE == 'da' %}Seneste fakturaer{% else %}Recent invoices{% endif %}</p><p class="stat-value">{{ invoice_count }}</p></div>
+</div>
+
+<section class="instr-section">
+    <div class="section-heading">
+        <h2>{% if request.LANGUAGE_CODE == 'da' %}Seneste fakturaer{% else %}Recent invoices{% endif %}</h2>
+        <p class="hero-text">{% if request.LANGUAGE_CODE == 'da' %}Samlet beløb på de viste fakturaer:{% else %}Combined amount for the invoices shown:{% endif %} {{ invoice_total }} {{ recent_invoices.0.currency|default:'DKK' }}</p>
+    </div>
+    {% if recent_invoices %}
+    <table class="instr-table">
+        <thead>
+            <tr>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Nummer{% else %}Number{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Periode{% else %}Period{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Status{% else %}Status{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Beløb{% else %}Amount{% endif %}</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for invoice in recent_invoices %}
+            <tr>
+                <td>{{ invoice.invoice_number }}</td>
+                <td>{{ invoice.period_start }} - {{ invoice.period_end }}</td>
+                <td>{{ invoice.get_status_display }}</td>
+                <td>{{ invoice.subtotal_amount }} {{ invoice.currency }}</td>
+                <td><a class="table-link" href="{% url 'studio_portal:invoice_detail' invoice.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Åbn →{% else %}Open →{% endif %}</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <h3>{% if request.LANGUAGE_CODE == 'da' %}Ingen fakturaer endnu{% else %}No invoices yet{% endif %}</h3>
+        <p>{% if request.LANGUAGE_CODE == 'da' %}Opret den første faktura baseret på aktive services, medarbejdere og sendte SMS-påmindelser.{% else %}Create the first invoice based on enabled services, employees, and sent SMS reminders.{% endif %}</p>
+    </div>
+    {% endif %}
+</section>
+{% endblock %}

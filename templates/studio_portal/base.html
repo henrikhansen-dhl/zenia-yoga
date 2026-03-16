@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Yoga Studio Admin{% endblock %}</title>
+    <title>{% block title %}Studio Portal | Yoga Studio Admin{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -23,8 +23,8 @@
                     {% endif %}
                 </div>
                 {% endif %}
-                <p class="eyebrow">Instructor</p>
-                <a class="brand" href="{% url 'instructor:dashboard' %}">Yoga Studio Admin</a>
+                <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Studioportal{% else %}Studio portal{% endif %}</p>
+                <a class="brand" href="{% url 'studio_portal:dashboard' %}">Yoga Studio Admin</a>
                 <p class="sidebar-user-id">{{ request.user.username }}</p>
                 {% if request.studio %}
                 <p class="client-email">{{ request.studio.name }}</p>
@@ -40,14 +40,26 @@
                 </select>
             </form>
             {% endif %}
+            {% if request.user.is_superuser %}
             <nav class="instr-nav">
-                <a class="instr-nav-link {% block nav_dashboard %}{% endblock %}" href="{% url 'instructor:dashboard' %}">{% if request.LANGUAGE_CODE == 'da' %}Overblik{% else %}Dashboard{% endif %}</a>
+                <p class="instr-nav-section-label">{% if request.LANGUAGE_CODE == 'da' %}Administration{% else %}Administration{% endif %}</p>
+                <a class="instr-nav-link {% block nav_admin %}{% endblock %}" href="{% url 'studio_admin:studio_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Studier{% else %}Studios{% endif %}</a>
+                <a class="instr-nav-link" href="{% url 'studio_admin:feature_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Services{% else %}Features{% endif %}</a>
+                <a class="instr-nav-link" href="/admin/">{% if request.LANGUAGE_CODE == 'da' %}Djangoadmin{% else %}Django admin{% endif %}</a>
+            </nav>
+            <hr class="instr-nav-divider">
+            {% endif %}
+            <nav class="instr-nav">
+                {% if request.user.is_superuser %}
+                <p class="instr-nav-section-label">{% if request.LANGUAGE_CODE == 'da' %}Aktivt studie{% else %}Active studio{% endif %}</p>
+                {% endif %}
+                <a class="instr-nav-link {% block nav_dashboard %}{% endblock %}" href="{% url 'studio_portal:dashboard' %}">{% if request.LANGUAGE_CODE == 'da' %}Overblik{% else %}Dashboard{% endif %}</a>
+                {% if request.studio_role == 'owner' or request.studio_role == 'manager' %}
+                <a class="instr-nav-link {% block nav_employees %}{% endblock %}" href="{% url 'studio_portal:employee_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Medarbejdere{% else %}Employees{% endif %}</a>
+                <a class="instr-nav-link {% block nav_invoices %}{% endblock %}" href="{% url 'studio_portal:invoice_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Fakturaer{% else %}Invoices{% endif %}</a>
+                {% endif %}
                 <a class="instr-nav-link {% block nav_classes %}{% endblock %}" href="{% url 'instructor:class_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Hold{% else %}Classes{% endif %}</a>
                 <a class="instr-nav-link {% block nav_clients %}{% endblock %}" href="{% url 'instructor:client_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Deltagere{% else %}Clients{% endif %}</a>
-                {% if request.user.is_superuser %}
-                <a class="instr-nav-link {% block nav_admin %}{% endblock %}" href="{% url 'studio_admin:studio_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Studier{% else %}Studios{% endif %}</a>
-                {% endif %}
-                <a class="instr-nav-link" href="{% url 'instructor:class_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Nyt hold{% else %}+ New class{% endif %}</a>
             </nav>
             <div class="instr-sidebar-footer">
                 <form class="language-switcher language-switcher-sidebar" action="/i18n/setlang/" method="post">
@@ -58,16 +70,9 @@
                 </form>
                 {% if request.studio %}
                 <a class="instr-nav-link" href="{% url 'booking:class_list' request.studio.slug %}">{% if request.LANGUAGE_CODE == 'da' %}← Offentlig side{% else %}← Public site{% endif %}</a>
-                {% else %}
-                <a class="instr-nav-link" href="{% url 'booking:public_home' %}">{% if request.LANGUAGE_CODE == 'da' %}← Offentlig side{% else %}← Public site{% endif %}</a>
                 {% endif %}
-                <form class="instr-logout-form" action="{% url 'admin:logout' %}" method="post">
+                <form class="instr-logout-form" action="{% url 'studio_portal:logout' %}" method="post">
                     {% csrf_token %}
-                    {% if request.studio %}
-                    <input type="hidden" name="next" value="{% url 'booking:class_list' request.studio.slug %}">
-                    {% else %}
-                    <input type="hidden" name="next" value="{% url 'booking:public_home' %}">
-                    {% endif %}
                     <button class="instr-nav-link instr-nav-button" type="submit">{% if request.LANGUAGE_CODE == 'da' %}Log ud{% else %}Log out{% endif %}</button>
                 </form>
             </div>
@@ -81,7 +86,6 @@
                     {% endfor %}
                 </section>
             {% endif %}
-
             <main>
                 {% block content %}{% endblock %}
             </main>

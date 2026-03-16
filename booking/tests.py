@@ -14,7 +14,7 @@ from django.utils import timezone
 from .db_router import StudioDatabaseRouter
 from .middleware import StudioContextMiddleware
 from .forms import BookingForm, YogaClassForm
-from .models import Booking, Client, Feature, SmsReminderLog, Studio, StudioFeatureAccess, StudioMembership, YogaClass
+from .models import Booking, Client, Feature, SmsReminderLog, Studio, StudioFeatureAccess, StudioInvoice, StudioMembership, YogaClass
 from .studio_db import deactivate_studio, set_current_studio_alias
 
 
@@ -639,14 +639,24 @@ class StudioPlatformTests(TestCase):
 			description='Send reminder messages before class.',
 		)
 
-	def test_platform_studio_list_requires_superuser(self):
-		response = self.client.get('/platform/studios/')
+	def test_studio_admin_studio_list_requires_superuser(self):
+		response = self.client.get('/studio/studios/')
 		self.assertEqual(response.status_code, 302)
+
+	def test_legacy_platform_url_redirects_to_studio_url(self):
+		response = self.client.get('/platform/studios/')
+		self.assertEqual(response.status_code, 301)
+		self.assertEqual(response.headers['Location'], '/studio/studios/')
+
+	def test_legacy_studios_root_redirects_to_studio_studios(self):
+		response = self.client.get('/studios')
+		self.assertEqual(response.status_code, 301)
+		self.assertEqual(response.headers['Location'], '/studio/studios/')
 
 	def test_superuser_can_create_studio_and_enable_feature(self):
 		self.client.force_login(self.superuser)
 
-		response = self.client.post('/platform/studios/new/', data={
+		response = self.client.post('/studio/studios/new/', data={
 			'name': 'North Studio',
 			'slug': 'north-studio',
 			'contact_name': 'Ava North',
@@ -660,7 +670,7 @@ class StudioPlatformTests(TestCase):
 
 		self.assertEqual(response.status_code, 302)
 		studio = Studio.objects.get(slug='north-studio')
-		self.assertEqual(response.headers['Location'], f'/platform/studios/{studio.pk}/edit/')
+		self.assertEqual(response.headers['Location'], f'/studio/studios/{studio.pk}/edit/')
 		self.assertEqual(studio.name, 'North Studio')
 		self.assertTrue(
 			StudioFeatureAccess.objects.filter(
@@ -673,7 +683,7 @@ class StudioPlatformTests(TestCase):
 	def test_studio_create_shows_db_provision_success_message(self):
 		self.client.force_login(self.superuser)
 
-		response = self.client.post('/platform/studios/new/', data={
+		response = self.client.post('/studio/studios/new/', data={
 			'name': 'West Studio',
 			'slug': 'west-studio',
 			'is_active': 'on',
@@ -691,7 +701,7 @@ class StudioPlatformTests(TestCase):
 		self.client.force_login(self.superuser)
 		studio = Studio.objects.create(name='North Studio', slug='north-studio')
 
-		response = self.client.get(f'/platform/studios/{studio.pk}/edit/')
+		response = self.client.get(f'/studio/studios/{studio.pk}/edit/')
 
 		self.assertEqual(response.status_code, 200)
 		self.assertContains(response, 'http://testserver/studios/north-studio/')
@@ -701,7 +711,7 @@ class StudioPlatformTests(TestCase):
 		self.client.force_login(self.superuser)
 		studio = Studio.objects.create(name='North Studio', slug='north-studio')
 
-		response = self.client.get('/platform/studios/')
+		response = self.client.get('/studio/studios/')
 
 		self.assertEqual(response.status_code, 200)
 		self.assertContains(response, 'http://testserver/studios/north-studio/')
@@ -716,7 +726,7 @@ class StudioPlatformTests(TestCase):
 			password='test-pass-123',
 		)
 
-		response = self.client.post('/platform/access/new/', data={
+		response = self.client.post('/studio/access/new/', data={
 			'studio': studio.pk,
 			'user': staff_user.pk,
 			'role': StudioMembership.ROLE_MANAGER,
@@ -845,7 +855,7 @@ class InstructorStudioAccessTests(TestCase):
 		created = YogaClass.objects.get(title='Studio Managed Flow')
 		self.assertEqual(created.studio, self.other_studio)
 
-	def test_user_without_studio_membership_falls_back_to_default_studio(self):
+	def test_user_without_studio_membership_is_denied(self):
 		unassigned_user = get_user_model().objects.create_user(
 			username='no-studio',
 			email='no-studio@example.com',
@@ -855,9 +865,7 @@ class InstructorStudioAccessTests(TestCase):
 
 		response = self.client.get('/instructor/')
 
-		self.assertEqual(response.status_code, 200)
-		self.assertContains(response, 'Default Flow')
-		self.assertNotContains(response, 'South Flow')
+		self.assertEqual(response.status_code, 403)
 
 	def test_instructor_sidebar_shows_studio_logo(self):
 		self.client.force_login(self.user)
@@ -911,3 +919,74 @@ class StudioContextMiddlewareTests(SimpleTestCase):
 		middleware(request_factory.get('/instructor/'))
 
 		self.assertEqual(StudioDatabaseRouter().db_for_read(YogaClass), 'default')
+
+
+class StudioPortalTests(TestCase):
+	def setUp(self):
+		self.owner = get_user_model().objects.create_user(
+			username='studio-owner',
+			email='owner@example.com',
+			password='test-pass-123',
+			is_staff=True,
+		)
+		self.studio = Studio.get_default()
+		StudioMembership.objects.create(
+			studio=self.studio,
+			user=self.owner,
+			role=StudioMembership.ROLE_OWNER,
+		)
+
+	def test_login_page_is_available(self):
+		response = self.client.get('/studio/login/')
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Studio')
+
+	def test_owner_can_create_employee_access(self):
+		self.client.force_login(self.owner)
+		response = self.client.post('/studio/employees/new/', data={
+			'username': 'new-employee',
+			'email': 'employee@example.com',
+			'first_name': 'New',
+			'last_name': 'Employee',
+			'password': 'new-pass-123',
+			'role': StudioMembership.ROLE_STAFF,
+			'is_active': 'on',
+		})
+
+		self.assertEqual(response.status_code, 302)
+		self.assertTrue(get_user_model().objects.filter(username='new-employee').exists())
+		self.assertTrue(
+			StudioMembership.objects.filter(
+				studio=self.studio,
+				user__username='new-employee',
+				role=StudioMembership.ROLE_STAFF,
+			).exists()
+		)
+
+	def test_owner_can_create_invoice_from_usage(self):
+		self.client.force_login(self.owner)
+		feature = Feature.objects.create(code='sms-reminders', name='SMS Reminders')
+		StudioFeatureAccess.objects.create(studio=self.studio, feature=feature, is_enabled=True)
+		SmsReminderLog.objects.create(
+			studio=self.studio,
+			client_name='Mia',
+			client_email='mia@example.com',
+			message_text='Reminder',
+			class_title='Morning Flow',
+			reminder_reason='manual_class_interest',
+			status=SmsReminderLog.STATUS_SENT,
+		)
+
+		today = timezone.localdate()
+		response = self.client.post('/studio/invoices/new/', data={
+			'period_start': (today - timedelta(days=1)).isoformat(),
+			'period_end': (today + timedelta(days=1)).isoformat(),
+			'subscription_fee': '100.00',
+			'employee_fee': '50.00',
+			'sms_fee': '2.50',
+			'notes': 'Monthly service invoice',
+		})
+
+		self.assertEqual(response.status_code, 302)
+		invoice = StudioInvoice.objects.get(studio=self.studio)
+		self.assertEqual(invoice.lines.count(), 3)

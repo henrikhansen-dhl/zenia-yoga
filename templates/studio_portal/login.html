@@ -1,0 +1,40 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="{{ request.LANGUAGE_CODE|default:'da' }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% if request.LANGUAGE_CODE == 'da' %}Studio-login{% else %}Studio login{% endif %} | Yoga Studio Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'booking/app.css' %}">
+</head>
+<body>
+    <div class="portal-auth-shell">
+        <section class="portal-auth-card">
+            <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Studieadministration{% else %}Studio administration{% endif %}</p>
+            <h1>{% if request.LANGUAGE_CODE == 'da' %}Log ind og styr flere studier{% else %}Log in and manage multiple studios{% endif %}</h1>
+            <p class="hero-text">
+                {% if request.LANGUAGE_CODE == 'da' %}
+                Brug denne portal til at administrere medarbejderadgang, skifte mellem studier og oprette fakturaer for de services studiet bruger.
+                {% else %}
+                Use this portal to manage employee access, switch between studios, and create invoices for the services each studio uses.
+                {% endif %}
+            </p>
+            <form method="post" class="stack-form">
+                {% csrf_token %}
+                {% for field in form %}
+                <div class="form-field">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.errors %}<div class="form-error">{{ field.errors|join:', ' }}</div>{% endif %}
+                </div>
+                {% endfor %}
+                {% if form.non_field_errors %}<div class="form-error">{{ form.non_field_errors|join:', ' }}</div>{% endif %}
+                <button class="button-primary button-full" type="submit">{% if request.LANGUAGE_CODE == 'da' %}Log ind{% else %}Log in{% endif %}</button>
+            </form>
+        </section>
+    </div>
+</body>
+</html>

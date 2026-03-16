@@ -1,17 +1,17 @@
-{% extends 'base.html' %}
+{% extends 'studio_portal/base.html' %}
 
-{% block title %}{% if request.LANGUAGE_CODE == 'da' %}Funktioner{% else %}Features{% endif %} | Yoga Studio Platform{% endblock %}
-{% block nav_platform %}active{% endblock %}
+{% block title %}{% if request.LANGUAGE_CODE == 'da' %}Funktioner{% else %}Features{% endif %} | Yoga Studio Admin{% endblock %}
+{% block nav_admin %}active{% endblock %}
 
 {% block content %}
 <div class="instr-page-header">
     <div>
-        <a class="back-link" href="{% url 'platform:studio_list' %}">← {% if request.LANGUAGE_CODE == 'da' %}Studier{% else %}Studios{% endif %}</a>
+        <a class="back-link" href="{% url 'studio_admin:studio_list' %}">← {% if request.LANGUAGE_CODE == 'da' %}Studier{% else %}Studios{% endif %}</a>
         <h1>{% if request.LANGUAGE_CODE == 'da' %}Funktioner{% else %}Features{% endif %}</h1>
     </div>
     <div class="instr-actions">
-        <a class="button-secondary" href="{% url 'platform:membership_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Adgange{% else %}Access{% endif %}</a>
-        <a class="button-primary" href="{% url 'platform:feature_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Ny funktion{% else %}+ New feature{% endif %}</a>
+        <a class="button-secondary" href="{% url 'studio_admin:membership_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Adgange{% else %}Access{% endif %}</a>
+        <a class="button-primary" href="{% url 'studio_admin:feature_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Ny funktion{% else %}+ New feature{% endif %}</a>
     </div>
 </div>
 
@@ -45,7 +45,7 @@
                         {% if feature.is_active %}{% if request.LANGUAGE_CODE == 'da' %}Aktiv{% else %}Active{% endif %}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Inaktiv{% else %}Inactive{% endif %}{% endif %}
                     </span>
                 </td>
-                <td><a class="table-link" href="{% url 'platform:feature_edit' feature.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Rediger →{% else %}Edit →{% endif %}</a></td>
+                <td><a class="table-link" href="{% url 'studio_admin:feature_edit' feature.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Rediger →{% else %}Edit →{% endif %}</a></td>
             </tr>
             {% endfor %}
         </tbody>
@@ -55,7 +55,7 @@
 <div class="empty-state">
     <h3>{% if request.LANGUAGE_CODE == 'da' %}Ingen funktioner endnu{% else %}No features yet{% endif %}</h3>
     <p>{% if request.LANGUAGE_CODE == 'da' %}Opret funktioner som fx SMS-påmindelser, klienthåndtering eller rapportering.{% else %}Create features such as SMS reminders, client management, or reporting.{% endif %}</p>
-    <a class="button-primary" href="{% url 'platform:feature_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Ny funktion{% else %}+ New feature{% endif %}</a>
+    <a class="button-primary" href="{% url 'studio_admin:feature_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Ny funktion{% else %}+ New feature{% endif %}</a>
 </div>
 {% endif %}
 {% endblock %}

@@ -127,6 +127,75 @@ class StudioMembership(models.Model):
 	def __str__(self):
 		return f'{self.user} - {self.studio.name} ({self.role})'
 
+	@property
+	def can_manage_team(self):
+		return self.role in {self.ROLE_OWNER, self.ROLE_MANAGER}
+
+
+class StudioInvoice(models.Model):
+	STATUS_DRAFT = 'draft'
+	STATUS_ISSUED = 'issued'
+	STATUS_PAID = 'paid'
+	STATUS_CHOICES = [
+		(STATUS_DRAFT, 'Draft'),
+		(STATUS_ISSUED, 'Issued'),
+		(STATUS_PAID, 'Paid'),
+	]
+
+	studio = models.ForeignKey(
+		Studio,
+		on_delete=models.CASCADE,
+		related_name='invoices',
+	)
+	created_by = models.ForeignKey(
+		settings.AUTH_USER_MODEL,
+		on_delete=models.SET_NULL,
+		null=True,
+		blank=True,
+		related_name='created_studio_invoices',
+	)
+	invoice_number = models.CharField(max_length=40, unique=True)
+	period_start = models.DateField()
+	period_end = models.DateField()
+	currency = models.CharField(max_length=8, default='DKK')
+	status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=STATUS_DRAFT)
+	notes = models.TextField(blank=True)
+	issued_at = models.DateTimeField(null=True, blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['-created_at']
+
+	def __str__(self):
+		return f'{self.invoice_number} - {self.studio.name}'
+
+	@property
+	def subtotal_amount(self):
+		return sum((line.line_total for line in self.lines.all()), start=0)
+
+
+class StudioInvoiceLine(models.Model):
+	invoice = models.ForeignKey(
+		StudioInvoice,
+		on_delete=models.CASCADE,
+		related_name='lines',
+	)
+	description = models.CharField(max_length=255)
+	quantity = models.DecimalField(max_digits=10, decimal_places=2, default=1)
+	unit_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+	sort_order = models.PositiveIntegerField(default=0)
+
+	class Meta:
+		ordering = ['sort_order', 'id']
+
+	def __str__(self):
+		return f'{self.invoice.invoice_number} - {self.description}'
+
+	@property
+	def line_total(self):
+		return self.quantity * self.unit_price
+
 
 class YogaClass(models.Model):
 	studio = models.ForeignKey(

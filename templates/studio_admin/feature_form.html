@@ -1,12 +1,12 @@
-{% extends 'base.html' %}
+{% extends 'studio_portal/base.html' %}
 
-{% block title %}{% if feature %}{% if request.LANGUAGE_CODE == 'da' %}Rediger funktion{% else %}Edit feature{% endif %}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Ny funktion{% else %}New feature{% endif %}{% endif %} | Yoga Studio Platform{% endblock %}
-{% block nav_platform %}active{% endblock %}
+{% block title %}{% if feature %}{% if request.LANGUAGE_CODE == 'da' %}Rediger funktion{% else %}Edit feature{% endif %}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Ny funktion{% else %}New feature{% endif %}{% endif %} | Yoga Studio Admin{% endblock %}
+{% block nav_admin %}active{% endblock %}
 
 {% block content %}
 <div class="instr-page-header">
     <div>
-        <a class="back-link" href="{% url 'platform:feature_list' %}">← {% if request.LANGUAGE_CODE == 'da' %}Funktioner{% else %}Features{% endif %}</a>
+        <a class="back-link" href="{% url 'studio_admin:feature_list' %}">← {% if request.LANGUAGE_CODE == 'da' %}Funktioner{% else %}Features{% endif %}</a>
         <h1>{% if feature %}{% if request.LANGUAGE_CODE == 'da' %}Rediger funktion{% else %}Edit feature{% endif %}{% else %}{% if request.LANGUAGE_CODE == 'da' %}Ny funktion{% else %}New feature{% endif %}{% endif %}</h1>
     </div>
 </div>
@@ -44,7 +44,7 @@
 
         <div class="instr-form-actions">
             <button class="button-primary" type="submit">{{ action }}</button>
-            <a class="button-secondary" href="{% url 'platform:feature_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Annuller{% else %}Cancel{% endif %}</a>
+            <a class="button-secondary" href="{% url 'studio_admin:feature_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Annuller{% else %}Cancel{% endif %}</a>
         </div>
     </form>
 </div>

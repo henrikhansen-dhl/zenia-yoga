@@ -1,0 +1,53 @@
+{% extends 'studio_portal/base.html' %}
+
+{% block title %}{% if request.LANGUAGE_CODE == 'da' %}Fakturaer{% else %}Invoices{% endif %} | Yoga Studio Admin{% endblock %}
+{% block nav_invoices %}active{% endblock %}
+
+{% block content %}
+<div class="instr-page-header">
+    <div>
+        <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Fakturering{% else %}Billing{% endif %}</p>
+        <h1>{% if request.LANGUAGE_CODE == 'da' %}Fakturaer for {{ studio.name }}{% else %}Invoices for {{ studio.name }}{% endif %}</h1>
+    </div>
+    <a class="button-primary" href="{% url 'studio_portal:invoice_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Ny faktura{% else %}+ New invoice{% endif %}</a>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-card"><p class="stat-label">{% if request.LANGUAGE_CODE == 'da' %}Fakturaer{% else %}Invoices{% endif %}</p><p class="stat-value">{{ invoice_count }}</p></div>
+    <div class="stat-card"><p class="stat-label">{% if request.LANGUAGE_CODE == 'da' %}Aktive services{% else %}Enabled services{% endif %}</p><p class="stat-value">{{ feature_count }}</p></div>
+    <div class="stat-card"><p class="stat-label">{% if request.LANGUAGE_CODE == 'da' %}Aktive medarbejdere{% else %}Active employees{% endif %}</p><p class="stat-value">{{ employee_count }}</p></div>
+    <div class="stat-card"><p class="stat-label">{% if request.LANGUAGE_CODE == 'da' %}SMS denne måned{% else %}SMS this month{% endif %}</p><p class="stat-value">{{ sms_this_month }}</p></div>
+</div>
+
+{% if invoices %}
+<section class="instr-section">
+    <table class="instr-table">
+        <thead>
+            <tr>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Nummer{% else %}Number{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Periode{% else %}Period{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Status{% else %}Status{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Beløb{% else %}Amount{% endif %}</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for invoice in invoices %}
+            <tr>
+                <td>{{ invoice.invoice_number }}</td>
+                <td>{{ invoice.period_start }} - {{ invoice.period_end }}</td>
+                <td>{{ invoice.get_status_display }}</td>
+                <td>{{ invoice.subtotal_amount }} {{ invoice.currency }}</td>
+                <td><a class="table-link" href="{% url 'studio_portal:invoice_detail' invoice.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Se →{% else %}View →{% endif %}</a></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% else %}
+<div class="empty-state">
+    <h3>{% if request.LANGUAGE_CODE == 'da' %}Ingen fakturaer endnu{% else %}No invoices yet{% endif %}</h3>
+    <p>{% if request.LANGUAGE_CODE == 'da' %}Når du opretter en faktura, bruger systemet aktive services, medarbejdere og sendte SMS-påmindelser som grundlag.{% else %}When you create an invoice, the system uses enabled services, employees, and sent SMS reminders as the basis.{% endif %}</p>
+</div>
+{% endif %}
+{% endblock %}

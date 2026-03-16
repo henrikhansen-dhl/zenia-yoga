@@ -1,0 +1,29 @@
+{% extends 'studio_portal/base.html' %}
+
+{% block title %}{{ action }} | Yoga Studio Admin{% endblock %}
+{% block nav_invoices %}active{% endblock %}
+
+{% block content %}
+<div class="instr-page-header">
+    <div>
+        <a class="back-link" href="{% url 'studio_portal:invoice_list' %}">← {% if request.LANGUAGE_CODE == 'da' %}Til fakturaer{% else %}Back to invoices{% endif %}</a>
+        <h1>{{ action }}</h1>
+        <p class="hero-text">{% if request.LANGUAGE_CODE == 'da' %}Fakturaen oprettes ud fra aktive services, aktive medarbejdere og sendte SMS-påmindelser i perioden.{% else %}The invoice is generated from enabled services, active employees, and sent SMS reminders for the selected period.{% endif %}</p>
+    </div>
+</div>
+
+<section class="detail-card">
+    <form method="post" class="stack-form">
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="form-field">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.errors %}<div class="form-error">{{ field.errors|join:', ' }}</div>{% endif %}
+        </div>
+        {% endfor %}
+        {% if form.non_field_errors %}<div class="form-error">{{ form.non_field_errors|join:', ' }}</div>{% endif %}
+        <button class="button-primary" type="submit">{{ action }}</button>
+    </form>
+</section>
+{% endblock %}

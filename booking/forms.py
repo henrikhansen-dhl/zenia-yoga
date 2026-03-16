@@ -1,11 +1,23 @@
-from datetime import datetime
+from datetime import datetime, time, timedelta
+from decimal import Decimal
 
 from django import forms
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from django.utils.translation import get_language
 
-from .models import Booking, Client, Feature, Studio, StudioFeatureAccess, StudioMembership, YogaClass
+from .models import (
+    Booking,
+    Client,
+    Feature,
+    SmsReminderLog,
+    Studio,
+    StudioFeatureAccess,
+    StudioInvoice,
+    StudioInvoiceLine,
+    StudioMembership,
+    YogaClass,
+)
 
 
 class LocalizedSplitDateTimeWidget(forms.MultiWidget):
@@ -471,3 +483,209 @@ class StudioMembershipForm(forms.ModelForm):
         if user.email:
             return f'{user.username} ({user.email})'
         return user.username
+
+
+class StudioEmployeeAccessForm(forms.Form):
+    username = forms.CharField(max_length=150)
+    email = forms.EmailField(max_length=254)
+    first_name = forms.CharField(max_length=150, required=False)
+    last_name = forms.CharField(max_length=150, required=False)
+    password = forms.CharField(widget=forms.PasswordInput(render_value=False), required=False)
+    role = forms.ChoiceField(choices=StudioMembership.ROLE_CHOICES)
+    is_active = forms.BooleanField(required=False, initial=True)
+
+    def __init__(self, *args, studio=None, membership=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.studio = studio
+        self.membership = membership
+        language = get_language() or 'en'
+        is_danish = language.startswith('da')
+
+        labels = {
+            'username': 'Brugernavn' if is_danish else 'Username',
+            'email': 'E-mail' if is_danish else 'Email',
+            'first_name': 'Fornavn' if is_danish else 'First name',
+            'last_name': 'Efternavn' if is_danish else 'Last name',
+            'password': 'Kodeord' if is_danish else 'Password',
+            'role': 'Rolle' if is_danish else 'Role',
+            'is_active': 'Aktiv adgang' if is_danish else 'Active access',
+        }
+        for field_name, label in labels.items():
+            self.fields[field_name].label = label
+
+        self.fields['password'].help_text = (
+            'Udfyld kun hvis brugeren er ny eller skal have nyt kodeord.'
+            if is_danish else
+            'Only fill this in for new users or to set a new password.'
+        )
+
+        if membership:
+            user = membership.user
+            self.initial.update({
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'role': membership.role,
+                'is_active': membership.is_active,
+            })
+
+    def clean_username(self):
+        return self.cleaned_data['username'].strip()
+
+    def clean_email(self):
+        return self.cleaned_data['email'].strip().lower()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        username = cleaned_data.get('username')
+        password = cleaned_data.get('password')
+        user_model = get_user_model()
+
+        if not username:
+            return cleaned_data
+
+        existing_user = user_model.objects.filter(username=username).first()
+        if existing_user and self.membership and existing_user.pk == self.membership.user_id:
+            return cleaned_data
+
+        if existing_user:
+            existing_membership = StudioMembership.objects.filter(
+                studio=self.studio,
+                user=existing_user,
+            ).exclude(pk=getattr(self.membership, 'pk', None)).first()
+            if existing_membership:
+                raise forms.ValidationError('This user already has access to the selected studio.')
+
+        if not existing_user and not password:
+            self.add_error('password', 'Password is required for a new user.')
+
+        return cleaned_data
+
+    def save(self):
+        user_model = get_user_model()
+        username = self.cleaned_data['username']
+        user = user_model.objects.filter(username=username).first()
+        created_user = False
+
+        if not user:
+            user = user_model(username=username)
+            created_user = True
+
+        user.email = self.cleaned_data['email']
+        user.first_name = self.cleaned_data['first_name']
+        user.last_name = self.cleaned_data['last_name']
+        user.is_active = True
+        user.is_staff = True
+        password = self.cleaned_data.get('password')
+        if password:
+            user.set_password(password)
+        elif created_user:
+            user.set_unusable_password()
+        user.save()
+
+        membership = self.membership or StudioMembership(studio=self.studio, user=user)
+        membership.role = self.cleaned_data['role']
+        membership.is_active = self.cleaned_data['is_active']
+        membership.save()
+        return membership
+
+
+class StudioInvoiceCreateForm(forms.Form):
+    period_start = forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}))
+    period_end = forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}))
+    subscription_fee = forms.DecimalField(max_digits=10, decimal_places=2, initial=Decimal('0.00'))
+    employee_fee = forms.DecimalField(max_digits=10, decimal_places=2, initial=Decimal('0.00'))
+    sms_fee = forms.DecimalField(max_digits=10, decimal_places=2, initial=Decimal('0.00'))
+    notes = forms.CharField(required=False, widget=forms.Textarea(attrs={'rows': 4}))
+
+    def __init__(self, *args, studio=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.studio = studio
+        language = get_language() or 'en'
+        is_danish = language.startswith('da')
+        if not self.initial.get('period_end'):
+            self.initial['period_end'] = timezone.localdate()
+        if not self.initial.get('period_start'):
+            self.initial['period_start'] = self.initial['period_end'].replace(day=1)
+
+        labels = {
+            'period_start': 'Periode start' if is_danish else 'Period start',
+            'period_end': 'Periode slut' if is_danish else 'Period end',
+            'subscription_fee': 'Pris pr. aktiv service' if is_danish else 'Price per enabled service',
+            'employee_fee': 'Pris pr. aktiv medarbejder' if is_danish else 'Price per active employee',
+            'sms_fee': 'Pris pr. sendt SMS' if is_danish else 'Price per sent SMS',
+            'notes': 'Noter' if is_danish else 'Notes',
+        }
+        for field_name, label in labels.items():
+            self.fields[field_name].label = label
+
+    def clean(self):
+        cleaned_data = super().clean()
+        start = cleaned_data.get('period_start')
+        end = cleaned_data.get('period_end')
+        if start and end and end < start:
+            raise forms.ValidationError('The period end must be on or after the period start.')
+        return cleaned_data
+
+    def save(self, created_by):
+        period_start = self.cleaned_data['period_start']
+        period_end = self.cleaned_data['period_end']
+        invoice_count = StudioInvoice.objects.filter(studio=self.studio).count() + 1
+        invoice_number = f'{self.studio.slug.upper()}-{period_end:%Y%m}-{invoice_count:03d}'
+        invoice = StudioInvoice.objects.create(
+            studio=self.studio,
+            created_by=created_by,
+            invoice_number=invoice_number,
+            period_start=period_start,
+            period_end=period_end,
+            notes=self.cleaned_data['notes'],
+        )
+
+        enabled_features = list(self.studio.enabled_feature_accesses)
+        if enabled_features:
+            StudioInvoiceLine.objects.create(
+                invoice=invoice,
+                description='Enabled services: ' + ', '.join(access.feature.name for access in enabled_features),
+                quantity=Decimal(len(enabled_features)),
+                unit_price=self.cleaned_data['subscription_fee'],
+                sort_order=10,
+            )
+
+        active_memberships = self.studio.active_memberships.count()
+        if active_memberships:
+            StudioInvoiceLine.objects.create(
+                invoice=invoice,
+                description='Active studio team members',
+                quantity=Decimal(active_memberships),
+                unit_price=self.cleaned_data['employee_fee'],
+                sort_order=20,
+            )
+
+        period_start_dt = timezone.make_aware(datetime.combine(period_start, time.min))
+        period_end_dt = timezone.make_aware(datetime.combine(period_end + timedelta(days=1), time.min))
+        sms_count = SmsReminderLog.objects.filter(
+            studio=self.studio,
+            status=SmsReminderLog.STATUS_SENT,
+            created_at__gte=period_start_dt,
+            created_at__lt=period_end_dt,
+        ).count()
+        if sms_count:
+            StudioInvoiceLine.objects.create(
+                invoice=invoice,
+                description='Sent SMS reminders',
+                quantity=Decimal(sms_count),
+                unit_price=self.cleaned_data['sms_fee'],
+                sort_order=30,
+            )
+
+        if not invoice.lines.exists():
+            StudioInvoiceLine.objects.create(
+                invoice=invoice,
+                description='No billable usage found for the selected period',
+                quantity=Decimal('1.00'),
+                unit_price=Decimal('0.00'),
+                sort_order=99,
+            )
+
+        return invoice
