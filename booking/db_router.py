@@ -14,8 +14,15 @@ import sys
 
 from .studio_db import STUDIO_DB_PREFIX, get_current_studio_alias
 
-# Models that live exclusively in per-studio databases.
-_STUDIO_MODELS = frozenset(['yogaclass', 'booking', 'client', 'smsreminderlog'])
+# Models that should always live in the platform/default database.
+_PLATFORM_MODELS = frozenset([
+    'studio',
+    'feature',
+    'studiofeatureaccess',
+    'studiomembership',
+    'studioinvoice',
+    'studioinvoiceline',
+])
 _RUNNING_TESTS = 'test' in sys.argv
 
 
@@ -32,11 +39,17 @@ class StudioDatabaseRouter:
             return active_alias
         return 'default'
 
-    def _route_booking(self, model_name: str) -> str | None:
-        if model_name in _STUDIO_MODELS:
-            return self._studio_alias()
-        # Platform booking models (Studio, Feature, etc.) → default
-        return 'default'
+    def _is_platform_booking_model(self, model_name: str | None) -> bool:
+        if not model_name:
+            return False
+        return model_name in _PLATFORM_MODELS
+
+    def _route_booking(self, model_name: str | None) -> str:
+        # Route all booking models except explicit platform models to studio DB.
+        # This includes auto-created many-to-many through models.
+        if self._is_platform_booking_model(model_name):
+            return 'default'
+        return self._studio_alias()
 
     # ------------------------------------------------------------------
     # Router interface
@@ -63,19 +76,17 @@ class StudioDatabaseRouter:
                 # Keep the historical single-DB test setup unless a test
                 # explicitly activates a studio alias.
                 return True
-            # Skip studio-specific model operations on the platform DB.
-            if app_label == 'booking' and model_name in _STUDIO_MODELS:
-                return False
+            # Booking app platform models migrate on default only.
+            if app_label == 'booking':
+                return self._is_platform_booking_model(model_name)
             return True
 
         if db.startswith(STUDIO_DB_PREFIX):
             if _RUNNING_TESTS:
                 return False
-            # Only allow booking app studio-model operations on studio DBs.
+            # Booking app non-platform models migrate on studio DBs only.
             if app_label == 'booking':
-                if model_name in _STUDIO_MODELS:
-                    return True
-                return False
+                return not self._is_platform_booking_model(model_name)
             # All non-booking apps (auth, contenttypes, …) are excluded from
             # studio databases.
             return False
