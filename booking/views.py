@@ -17,8 +17,13 @@ def _public_studio(studio_slug=None):
 
 
 def default_class_list_redirect(request):
-	studio = Studio.get_default()
-	return redirect('booking:class_list', studio_slug=studio.slug)
+	studios = Studio.objects.filter(is_active=True).order_by('name')
+	default_studio = Studio.get_default()
+	context = {
+		'studios': studios,
+		'default_studio': default_studio,
+	}
+	return render(request, 'booking/public_home.html', context)
 
 
 def legacy_class_detail_redirect(request, pk):

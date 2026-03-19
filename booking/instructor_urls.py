@@ -18,6 +18,7 @@ urlpatterns = [
     path('classes/<int:pk>/participants/', instructor_views.class_participants_update, name='class_participants_update'),
     path('classes/<int:pk>/participants/add/', instructor_views.class_participant_quick_add, name='class_participant_quick_add'),
     path('classes/<int:pk>/participants/<int:client_pk>/remove/', instructor_views.class_participant_remove, name='class_participant_remove'),
+    path('classes/<int:pk>/bookings/add/', instructor_views.class_booking_add, name='class_booking_add'),
     path('classes/<int:pk>/toggle-publish/', instructor_views.class_toggle_publish, name='class_toggle_publish'),
     path('classes/<int:pk>/delete/', instructor_views.class_delete, name='class_delete'),
     path('bookings/<int:pk>/delete/', instructor_views.booking_delete, name='booking_delete'),

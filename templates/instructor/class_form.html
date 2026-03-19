@@ -50,7 +50,7 @@
 
         <fieldset class="instr-fieldset">
             <legend>{% if request.LANGUAGE_CODE == 'da' %}Tid og kapacitet{% else %}Schedule &amp; capacity{% endif %}</legend>
-            <div class="form-row">
+            <div class="form-row" data-standard-schedule-row>
                 <label>{{ form.start_time.label }}</label>
                 <div class="split-field-grid">
                     {% for widget in form.start_time.subwidgets %}
@@ -62,7 +62,7 @@
                 </div>
                 {% if form.start_time.errors %}<div class="field-error">{{ form.start_time.errors|join:', ' }}</div>{% endif %}
             </div>
-            <div class="form-row">
+            <div class="form-row" data-standard-schedule-row>
                 <label>{{ form.end_time.label }}</label>
                 <div class="split-field-grid">
                     {% for widget in form.end_time.subwidgets %}
@@ -73,6 +73,28 @@
                     {% endfor %}
                 </div>
                 {% if form.end_time.errors %}<div class="field-error">{{ form.end_time.errors|join:', ' }}</div>{% endif %}
+            </div>
+            <div data-weekly-schedule-row>
+                <div class="form-row">
+                    <label for="{{ form.recurrence_weekday.id_for_label }}">{{ form.recurrence_weekday.label }}</label>
+                    {{ form.recurrence_weekday }}
+                    {% if form.recurrence_weekday.errors %}<div class="field-error">{{ form.recurrence_weekday.errors|join:', ' }}</div>{% endif %}
+                </div>
+                <div class="form-row">
+                    <label>{% if request.LANGUAGE_CODE == 'da' %}Tid{% else %}Time{% endif %}</label>
+                    <div class="split-field-grid">
+                        <div class="split-field-part">
+                            <span class="split-field-label">{{ form.recurring_start_time.label }}</span>
+                            {{ form.recurring_start_time }}
+                        </div>
+                        <div class="split-field-part">
+                            <span class="split-field-label">{{ form.recurring_end_time.label }}</span>
+                            {{ form.recurring_end_time }}
+                        </div>
+                    </div>
+                    {% if form.recurring_start_time.errors %}<div class="field-error">{{ form.recurring_start_time.errors|join:', ' }}</div>{% endif %}
+                    {% if form.recurring_end_time.errors %}<div class="field-error">{{ form.recurring_end_time.errors|join:', ' }}</div>{% endif %}
+                </div>
             </div>
             <div class="form-row">
                 <label for="{{ form.capacity.id_for_label }}">{{ form.capacity.label }}</label>
@@ -124,4 +146,31 @@
         </div>
     </form>
 </div>
+
+<script>
+    (function () {
+        const weeklyCheckbox = document.getElementById('{{ form.is_weekly_recurring.id_for_label }}');
+        if (!weeklyCheckbox) {
+            return;
+        }
+
+        const standardRows = document.querySelectorAll('[data-standard-schedule-row]');
+        const weeklyBlock = document.querySelector('[data-weekly-schedule-row]');
+
+        function toggleScheduleFields() {
+            const isWeekly = weeklyCheckbox.checked;
+
+            standardRows.forEach((row) => {
+                row.style.display = isWeekly ? 'none' : '';
+            });
+
+            if (weeklyBlock) {
+                weeklyBlock.style.display = isWeekly ? '' : 'none';
+            }
+        }
+
+        toggleScheduleFields();
+        weeklyCheckbox.addEventListener('change', toggleScheduleFields);
+    })();
+</script>
 {% endblock %}

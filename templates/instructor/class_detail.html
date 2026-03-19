@@ -90,8 +90,21 @@
     <section class="instr-card">
         <div class="instr-bookings-header">
             <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Bookinger{% else %}Bookings{% endif %}</p>
-            <h2>{{ yoga_class.booked_count }} / {{ yoga_class.capacity }}</h2>
+            <div class="instr-bookings-toolbar">
+                <h2>{{ yoga_class.booked_count }} / {{ yoga_class.capacity }}</h2>
+                <button class="button-secondary button-compact" type="button" data-manual-booking-trigger>
+                    {% if request.LANGUAGE_CODE == 'da' %}Tilføj manuel booking{% else %}Add manual booking{% endif %}
+                </button>
+            </div>
         </div>
+
+        <p class="instr-empty">
+            {% if request.LANGUAGE_CODE == 'da' %}
+            Brug knappen for at oprette en booking, hvis en klient ringer ind.
+            {% else %}
+            Use the button to create a booking if a client calls by phone.
+            {% endif %}
+        </p>
 
         {% if bookings %}
         <table class="instr-table instr-table-compact">
@@ -174,7 +187,7 @@
         <hr class="section-divider">
 
         <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Hurtig tilføjelse{% else %}Quick add{% endif %}</p>
-        <h3>{% if request.LANGUAGE_CODE == 'da' %}Tilføj deltager med e-mail{% else %}Add participant by email{% endif %}</h3>
+        <h3>{% if request.LANGUAGE_CODE == 'da' %}Tilføj deltager med telefon{% else %}Add participant by phone{% endif %}</h3>
 
         <form method="post" action="{% url 'instructor:class_participant_quick_add' yoga_class.pk %}" class="quick-add-grid">
             {% csrf_token %}
@@ -197,4 +210,127 @@
     </section>
     {% endif %}
 </div>
+
+<div class="client-modal-backdrop" data-manual-booking-modal hidden>
+    <div class="client-modal instr-card manual-booking-modal" role="dialog" aria-modal="true" aria-labelledby="manual-booking-title">
+        <button type="button" class="client-modal-close" data-manual-booking-close aria-label="{% if request.LANGUAGE_CODE == 'da' %}Luk{% else %}Close{% endif %}">&times;</button>
+        <div class="instr-bookings-header">
+            <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Manuel booking{% else %}Manual booking{% endif %}</p>
+            <h2 id="manual-booking-title">{% if request.LANGUAGE_CODE == 'da' %}Tilføj booking{% else %}Add booking{% endif %}</h2>
+        </div>
+        <p class="instr-empty">
+            {% if request.LANGUAGE_CODE == 'da' %}
+            Udfyld felterne og gem bookingen for klienten.
+            {% else %}
+            Fill in the fields and save the booking for the client.
+            {% endif %}
+        </p>
+        <form method="post" action="{% url 'instructor:class_booking_add' yoga_class.pk %}" class="manual-booking-grid">
+            {% csrf_token %}
+            <div class="form-row manual-booking-existing-client">
+                <label for="manual-existing-client-select">
+                    {% if request.LANGUAGE_CODE == 'da' %}Vælg eksisterende klient{% else %}Choose existing client{% endif %}
+                </label>
+                <select id="manual-existing-client-select" data-existing-client-select>
+                    <option value="">{% if request.LANGUAGE_CODE == 'da' %}-- Vælg fra klientliste --{% else %}-- Select from client list --{% endif %}</option>
+                    {% for client in studio_clients %}
+                    <option
+                        value="{{ client.phone }}"
+                        data-client-name="{{ client.name }}"
+                        data-client-email="{{ client.email }}"
+                        data-client-phone="{{ client.phone }}"
+                    >
+                        {{ client.name }}{% if client.phone %} ({{ client.phone }}){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+                <p class="field-help">
+                    {% if request.LANGUAGE_CODE == 'da' %}
+                    Når du vælger en klient, udfyldes felterne automatisk.
+                    {% else %}
+                    Selecting a client fills the fields automatically.
+                    {% endif %}
+                </p>
+            </div>
+            <div class="form-row">
+                <label for="{{ manual_booking_form.client_name.id_for_label }}">{{ manual_booking_form.client_name.label }}</label>
+                {{ manual_booking_form.client_name }}
+            </div>
+            <div class="form-row">
+                <label for="{{ manual_booking_form.client_phone.id_for_label }}">{{ manual_booking_form.client_phone.label }}</label>
+                {{ manual_booking_form.client_phone }}
+            </div>
+            <div class="form-row">
+                <label for="{{ manual_booking_form.client_email.id_for_label }}">{{ manual_booking_form.client_email.label }}</label>
+                {{ manual_booking_form.client_email }}
+            </div>
+            <div class="form-row manual-booking-notes">
+                <label for="{{ manual_booking_form.notes.id_for_label }}">{{ manual_booking_form.notes.label }}</label>
+                {{ manual_booking_form.notes }}
+            </div>
+            <div class="instr-form-actions">
+                <button class="button-primary" type="submit">{% if request.LANGUAGE_CODE == 'da' %}Gem booking{% else %}Save booking{% endif %}</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const trigger = document.querySelector('[data-manual-booking-trigger]');
+        const modal = document.querySelector('[data-manual-booking-modal]');
+        const closeButton = document.querySelector('[data-manual-booking-close]');
+        const existingClientSelect = document.querySelector('[data-existing-client-select]');
+        const nameInput = modal ? modal.querySelector('[name="client_name"]') : null;
+        const emailInput = modal ? modal.querySelector('[name="client_email"]') : null;
+        const phoneInput = modal ? modal.querySelector('[name="client_phone"]') : null;
+
+        if (!trigger || !modal || !closeButton) {
+            return;
+        }
+
+        const openModal = function () {
+            modal.hidden = false;
+            requestAnimationFrame(function () {
+                modal.classList.add('is-visible');
+            });
+            document.body.classList.add('modal-open');
+        };
+
+        const closeModal = function () {
+            modal.classList.remove('is-visible');
+            setTimeout(function () {
+                modal.hidden = true;
+            }, 180);
+            document.body.classList.remove('modal-open');
+        };
+
+        trigger.addEventListener('click', openModal);
+        closeButton.addEventListener('click', closeModal);
+
+        modal.addEventListener('click', function (event) {
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && modal.classList.contains('is-visible')) {
+                closeModal();
+            }
+        });
+
+        if (existingClientSelect && nameInput && emailInput && phoneInput) {
+            existingClientSelect.addEventListener('change', function () {
+                const selected = existingClientSelect.options[existingClientSelect.selectedIndex];
+                if (!selected || !selected.value) {
+                    return;
+                }
+                nameInput.value = selected.dataset.clientName || '';
+                emailInput.value = selected.dataset.clientEmail || '';
+                phoneInput.value = selected.dataset.clientPhone || '';
+            });
+        }
+    })();
+</script>
 {% endblock %}

@@ -88,6 +88,21 @@ def studio_login_required(view_func):
     return wrapped
 
 
+def superuser_portal_required(view_func):
+    """Allow only superusers on /studio portal pages; redirect others to instructor area."""
+    @wraps(view_func)
+    def wrapped(request, *args, **kwargs):
+        if not request.user.is_authenticated:
+            return redirect('/studio/login/?next=' + request.get_full_path())
+
+        if not request.user.is_superuser:
+            return redirect('instructor:dashboard')
+
+        return view_func(request, *args, **kwargs)
+
+    return wrapped
+
+
 def get_user_studio_role(user, studio):
     if not user.is_authenticated:
         return None

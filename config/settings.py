@@ -157,6 +157,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = 'admin:login'
 LOGIN_REDIRECT_URL = '/studio/'
 
+SITE_URL = os.getenv('SITE_URL', 'http://127.0.0.1:8001').rstrip('/')
+
 SMS_GATEWAY_ENABLED = os.getenv('SMS_GATEWAY_ENABLED', 'False').lower() == 'true'
 SMS_GATEWAY_URL = os.getenv('SMS_GATEWAY_URL', 'https://api.cpsms.dk/v2/send')
 SMS_GATEWAY_USERNAME = os.getenv('SMS_GATEWAY_USERNAME', '')

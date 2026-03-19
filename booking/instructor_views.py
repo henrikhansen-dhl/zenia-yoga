@@ -1,20 +1,16 @@
 import csv
-import base64
-import hashlib
-import json
-import re
-from urllib import error, request as urllib_request
 
 from django.conf import settings
 from django.contrib import messages
+from django.db.models import Prefetch
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import get_language
 
-from .forms import ClientForm, WeeklyParticipantQuickAddForm, WeeklyParticipantsForm, YogaClassForm
+from .forms import BookingForm, ClientForm, WeeklyParticipantQuickAddForm, WeeklyParticipantsForm, YogaClassForm
 from .models import Booking, Client, SmsReminderLog, YogaClass
+from .sms_service import build_sms_rows, dispatch_reminders, sms_gateway_ready
 from .studio_access import studio_login_required
 
 
@@ -22,195 +18,10 @@ def _msg(english, danish):
     return danish if (get_language() or 'en').startswith('da') else english
 
 
-def _normalize_phone(raw_phone):
-    digits = re.sub(r'\D', '', raw_phone or '')
-    if not digits:
-        return ''
-    if digits.startswith('00'):
-        digits = digits[2:]
-    if raw_phone and str(raw_phone).strip().startswith('+'):
-        return digits
-    if len(digits) == 8:
-        return f'{settings.SMS_GATEWAY_DEFAULT_COUNTRY_CODE}{digits}'
-    return digits
-
-
 def _build_sms_rows(request, now=None):
-    now = now or timezone.now()
-    studio = request.studio
-    rows = []
-    exported = set()
-
-    clients = Client.objects.filter(studio=studio).prefetch_related('reminder_classes').all().order_by('name')
-    for client in clients:
-        if not client.phone:
-            continue
-
-        upcoming_classes = client.reminder_classes.filter(
-            studio=studio,
-            is_published=True,
-            start_time__gte=now,
-        ).order_by('start_time')
-
-        for yoga_class in upcoming_classes:
-            export_key = (client.email.lower(), yoga_class.pk)
-            if export_key in exported:
-                continue
-
-            class_start_local = timezone.localtime(yoga_class.start_time)
-            class_start_text = class_start_local.strftime('%d-%m-%Y %H:%M')
-            booking_link = request.build_absolute_uri(
-                reverse('booking:class_detail', kwargs={'studio_slug': yoga_class.studio.slug, 'pk': yoga_class.pk})
-            )
-
-            sms_da = (
-                f"Hej {client.name}, husk at reservere din plads til {yoga_class.title} "
-                f"den {class_start_text}. Book her: {booking_link}"
-            )
-            sms_en = (
-                f"Hi {client.name}, remember to reserve your seat for {yoga_class.title} "
-                f"on {class_start_text}. Book here: {booking_link}"
-            )
-
-            rows.append({
-                'client_name': client.name,
-                'phone': client.phone,
-                'email': client.email,
-                'class_title': yoga_class.title,
-                'class_start': class_start_text,
-                'booking_link': booking_link,
-                'reminder_reason': 'manual_class_interest',
-                'sms_message_da': sms_da,
-                'sms_message_en': sms_en,
-                'class_pk': yoga_class.pk,
-                'studio_id': yoga_class.studio_id,
-            })
-            exported.add(export_key)
-
-    today_local_date = timezone.localdate(now)
-    recurring_classes = YogaClass.objects.filter(
-        studio=studio,
-        is_published=True,
-        start_time__gte=now,
-    ).select_related('recurrence_parent').prefetch_related('bookings')
-
-    for yoga_class in recurring_classes:
-        root_class = yoga_class.recurrence_root
-        if not root_class.is_weekly_recurring:
-            continue
-
-        if timezone.localtime(yoga_class.start_time).date() != today_local_date:
-            continue
-
-        if yoga_class.spots_left <= 0:
-            continue
-
-        booked_emails = {
-            booking.client_email.strip().lower()
-            for booking in yoga_class.bookings.all()
-        }
-
-        for participant in root_class.series_participants.all():
-            if not participant.phone:
-                continue
-            if participant.email.lower() in booked_emails:
-                continue
-
-            export_key = (participant.email.lower(), yoga_class.pk)
-            if export_key in exported:
-                continue
-
-            class_start_local = timezone.localtime(yoga_class.start_time)
-            class_start_text = class_start_local.strftime('%d-%m-%Y %H:%M')
-            booking_link = request.build_absolute_uri(
-                reverse('booking:class_detail', kwargs={'studio_slug': yoga_class.studio.slug, 'pk': yoga_class.pk})
-            )
-
-            sms_da = (
-                f"Hej {participant.name}, holdet {yoga_class.title} er i dag kl. {class_start_local:%H:%M}. "
-                f"Husk at reservere din plads: {booking_link}"
-            )
-            sms_en = (
-                f"Hi {participant.name}, {yoga_class.title} is today at {class_start_local:%H:%M}. "
-                f"Remember to reserve your seat: {booking_link}"
-            )
-
-            rows.append({
-                'client_name': participant.name,
-                'phone': participant.phone,
-                'email': participant.email,
-                'class_title': yoga_class.title,
-                'class_start': class_start_text,
-                'booking_link': booking_link,
-                'reminder_reason': 'weekly_unbooked_today',
-                'sms_message_da': sms_da,
-                'sms_message_en': sms_en,
-                'class_pk': yoga_class.pk,
-                'studio_id': yoga_class.studio_id,
-            })
-            exported.add(export_key)
-
-    return rows
-
-
-def _send_sms_via_cpsms(phone, message_text, reference):
-    gateway_username = settings.SMS_GATEWAY_USERNAME
-    gateway_api_key = settings.SMS_GATEWAY_API_KEY
-    auth_token = f'{gateway_username}:{gateway_api_key}'.encode('utf-8')
-    encoded_auth = base64.b64encode(auth_token).decode('ascii')
-
-    payload = {
-        'to': phone,
-        'message': message_text,
-        'from': settings.SMS_GATEWAY_FROM,
-        'encoding': 'UTF-8',
-        'reference': reference,
-    }
-
-    req = urllib_request.Request(
-        settings.SMS_GATEWAY_URL,
-        data=json.dumps(payload).encode('utf-8'),
-        headers={
-            'Authorization': f'Basic {encoded_auth}',
-            'Content-Type': 'application/json',
-        },
-        method='POST',
-    )
-
-    try:
-        with urllib_request.urlopen(req, timeout=settings.SMS_GATEWAY_TIMEOUT_SECONDS) as resp:
-            body = resp.read().decode('utf-8')
-            parsed = json.loads(body) if body else {}
-            if parsed.get('success'):
-                return True, ''
-            if parsed.get('error'):
-                err = parsed['error']
-                if isinstance(err, list):
-                    err_text = '; '.join(str(item.get('message', item)) for item in err)
-                elif isinstance(err, dict):
-                    err_text = str(err.get('message', err))
-                else:
-                    err_text = str(err)
-                return False, err_text
-            return False, 'Gateway returned an unexpected response.'
-    except error.HTTPError as exc:
-        try:
-            error_body = exc.read().decode('utf-8')
-        except Exception:
-            error_body = ''
-        return False, f'HTTP {exc.code}: {error_body or exc.reason}'
-    except error.URLError as exc:
-        return False, f'Connection error: {exc.reason}'
-
-
-def _sms_gateway_ready():
-    return (
-        settings.SMS_GATEWAY_ENABLED
-        and settings.SMS_GATEWAY_URL
-        and settings.SMS_GATEWAY_USERNAME
-        and settings.SMS_GATEWAY_API_KEY
-        and settings.SMS_GATEWAY_FROM
-    )
+    """Thin wrapper around sms_service.build_sms_rows that derives site_url from the request."""
+    site_url = request.build_absolute_uri('/')
+    return build_sms_rows(request.studio, site_url=site_url, now=now)
 
 
 @studio_login_required
@@ -241,11 +52,11 @@ def class_list(request):
     upcoming = YogaClass.objects.filter(
         studio=studio,
         start_time__gte=now
-    ).order_by('start_time')
+    ).select_related('recurrence_parent').order_by('start_time')
     past = YogaClass.objects.filter(
         studio=studio,
         start_time__lt=now
-    ).order_by('-start_time')
+    ).select_related('recurrence_parent').order_by('-start_time')
     context = {'studio': studio, 'upcoming': upcoming, 'past': past}
     return render(request, 'instructor/class_list.html', context)
 
@@ -254,18 +65,19 @@ def class_list(request):
 def client_list(request):
     now = timezone.now()
     studio = request.studio
+    max_classes_per_client = 15
 
     if request.method == 'POST':
         form = ClientForm(request.POST, studio=studio)
         if form.is_valid():
-            client_email = form.cleaned_data['email']
+            client_phone = form.cleaned_data['phone']
             client, created = Client.objects.update_or_create(
                 studio=studio,
-                email=client_email,
+                phone=client_phone,
                 defaults={
                     'studio': studio,
                     'name': form.cleaned_data['name'],
-                    'phone': form.cleaned_data['phone'],
+                    'email': form.cleaned_data['email'],
                 },
             )
             client.reminder_classes.set(form.cleaned_data['reminder_classes'])
@@ -280,17 +92,24 @@ def client_list(request):
     else:
         form = ClientForm(studio=studio)
 
-    bookings = Booking.objects.filter(studio=studio).select_related('yoga_class').order_by(
+    bookings = Booking.objects.filter(studio=studio).select_related('yoga_class').only(
         'client_name',
+        'client_phone',
+        'client_email',
         'created_at',
+        'yoga_class_id',
+        'yoga_class__title',
         'yoga_class__start_time',
-    )
+    ).order_by('-yoga_class__start_time', '-created_at')
 
-    clients_by_email = {}
+    clients_by_phone = {}
     for booking in bookings:
-        key = booking.client_email.strip().lower()
-        if key not in clients_by_email:
-            clients_by_email[key] = {
+        key = booking.client_phone.strip() if booking.client_phone else ''
+        if not key:
+            key = (booking.client_email or '').strip().lower() or f'booking:{booking.pk}'
+
+        if key not in clients_by_phone:
+            clients_by_phone[key] = {
                 'name': booking.client_name,
                 'phone': booking.client_phone or '',
                 'email': booking.client_email,
@@ -301,22 +120,37 @@ def client_list(request):
                 'client_id': None,
             }
 
-        client_entry = clients_by_email[key]
+        client_entry = clients_by_phone[key]
         if booking.created_at >= client_entry['last_created_at']:
             client_entry['name'] = booking.client_name
             client_entry['last_created_at'] = booking.created_at
             if booking.client_phone:
                 client_entry['phone'] = booking.client_phone
+            if booking.client_email:
+                client_entry['email'] = booking.client_email
 
-        if booking.yoga_class_id not in client_entry['class_ids']:
+        if (
+            booking.yoga_class_id not in client_entry['class_ids']
+            and len(client_entry['class_ids']) < max_classes_per_client
+        ):
             client_entry['class_ids'].add(booking.yoga_class_id)
             client_entry['classes'].append(booking.yoga_class)
 
-    manual_clients = Client.objects.filter(studio=studio).prefetch_related('reminder_classes').all().order_by('name')
+    reminder_classes_qs = YogaClass.objects.filter(
+        studio=studio,
+        is_published=True,
+        start_time__gte=now,
+    ).order_by('start_time')
+    manual_clients = Client.objects.filter(studio=studio).prefetch_related(
+        Prefetch('reminder_classes', queryset=reminder_classes_qs, to_attr='upcoming_reminder_classes')
+    ).all().order_by('name')
     for manual_client in manual_clients:
-        key = manual_client.email.strip().lower()
-        if key not in clients_by_email:
-            clients_by_email[key] = {
+        key = manual_client.phone.strip() if manual_client.phone else ''
+        if not key:
+            key = (manual_client.email or '').strip().lower() or f'client:{manual_client.pk}'
+
+        if key not in clients_by_phone:
+            clients_by_phone[key] = {
                 'name': manual_client.name,
                 'phone': manual_client.phone or '',
                 'email': manual_client.email,
@@ -327,21 +161,18 @@ def client_list(request):
                 'client_id': manual_client.pk,
             }
 
-        client_entry = clients_by_email[key]
+        client_entry = clients_by_phone[key]
         if manual_client.name:
             client_entry['name'] = manual_client.name
         if manual_client.phone:
             client_entry['phone'] = manual_client.phone
+        if manual_client.email:
+            client_entry['email'] = manual_client.email
         client_entry['client_id'] = manual_client.pk
 
-        client_entry['reminder_classes'] = list(
-            manual_client.reminder_classes.filter(
-                is_published=True,
-                start_time__gte=now,
-            ).order_by('start_time')
-        )
+        client_entry['reminder_classes'] = list(manual_client.upcoming_reminder_classes)
 
-    clients = sorted(clients_by_email.values(), key=lambda item: item['name'].lower())
+    clients = sorted(clients_by_phone.values(), key=lambda item: item['name'].lower())
     for client in clients:
         client.pop('class_ids', None)
 
@@ -443,7 +274,7 @@ def send_sms_reminders(request):
     if request.method != 'POST':
         return redirect('instructor:client_list')
 
-    if not _sms_gateway_ready():
+    if not sms_gateway_ready():
         messages.error(
             request,
             _msg(
@@ -461,85 +292,10 @@ def send_sms_reminders(request):
         )
         return redirect('instructor:client_list')
 
-    language = settings.SMS_GATEWAY_LANGUAGE.lower()
-    sent_count = 0
-    failed_count = 0
-    failure_examples = []
-    logs_to_create = []
-
-    for row in rows:
-        normalized_phone = _normalize_phone(row['phone'])
-        message_text = row['sms_message_da'] if language == 'da' else row['sms_message_en']
-        email_hash = hashlib.sha1(row['email'].lower().encode('utf-8')).hexdigest()[:10]
-        reference = f"z{row['class_pk']}-{email_hash}"
-
-        if not normalized_phone:
-            failed_count += 1
-            if len(failure_examples) < 3:
-                failure_examples.append(f"{row['client_name']}: invalid phone")
-            logs_to_create.append(
-                SmsReminderLog(
-                    studio_id=row['studio_id'],
-                    yoga_class_id=row['class_pk'],
-                    client_name=row['client_name'],
-                    client_email=row['email'],
-                    raw_phone=row['phone'],
-                    normalized_phone='',
-                    message_language=language,
-                    message_text=message_text,
-                    class_title=row['class_title'],
-                    reminder_reason=row['reminder_reason'],
-                    status=SmsReminderLog.STATUS_FAILED,
-                    gateway_reference=reference,
-                    gateway_error='invalid_phone',
-                )
-            )
-            continue
-
-        success, error_text = _send_sms_via_cpsms(normalized_phone, message_text, reference)
-        if success:
-            sent_count += 1
-            logs_to_create.append(
-                SmsReminderLog(
-                    studio_id=row['studio_id'],
-                    yoga_class_id=row['class_pk'],
-                    client_name=row['client_name'],
-                    client_email=row['email'],
-                    raw_phone=row['phone'],
-                    normalized_phone=normalized_phone,
-                    message_language=language,
-                    message_text=message_text,
-                    class_title=row['class_title'],
-                    reminder_reason=row['reminder_reason'],
-                    status=SmsReminderLog.STATUS_SENT,
-                    gateway_reference=reference,
-                    gateway_error='',
-                )
-            )
-        else:
-            failed_count += 1
-            if len(failure_examples) < 3:
-                failure_examples.append(f"{row['client_name']}: {error_text}")
-            logs_to_create.append(
-                SmsReminderLog(
-                    studio_id=row['studio_id'],
-                    yoga_class_id=row['class_pk'],
-                    client_name=row['client_name'],
-                    client_email=row['email'],
-                    raw_phone=row['phone'],
-                    normalized_phone=normalized_phone,
-                    message_language=language,
-                    message_text=message_text,
-                    class_title=row['class_title'],
-                    reminder_reason=row['reminder_reason'],
-                    status=SmsReminderLog.STATUS_FAILED,
-                    gateway_reference=reference,
-                    gateway_error=error_text,
-                )
-            )
-
-    if logs_to_create:
-        SmsReminderLog.objects.bulk_create(logs_to_create)
+    result = dispatch_reminders(rows, language=settings.SMS_GATEWAY_LANGUAGE)
+    sent_count = result['sent']
+    failed_count = result['failed']
+    failure_examples = result['failure_examples']
 
     if sent_count:
         messages.success(
@@ -592,6 +348,7 @@ def class_detail(request, pk):
     yoga_class.sync_weekly_occurrences(upcoming_limit=2)
     root_class = yoga_class.recurrence_root
     bookings = yoga_class.bookings.order_by('created_at')
+    manual_booking_form = BookingForm(yoga_class=yoga_class)
     participants_form = None
     participant_quick_add_form = None
     if root_class.is_weekly_recurring:
@@ -604,6 +361,8 @@ def class_detail(request, pk):
     context = {
         'yoga_class': yoga_class,
         'bookings': bookings,
+        'manual_booking_form': manual_booking_form,
+        'studio_clients': Client.objects.filter(studio=request.studio).order_by('name').only('name', 'email', 'phone'),
         'participants_form': participants_form,
         'participant_quick_add_form': participant_quick_add_form,
         'series_participants': root_class.series_participants.all().order_by('name') if root_class.is_weekly_recurring else [],
@@ -614,6 +373,32 @@ def class_detail(request, pk):
         ] if root_class.is_weekly_recurring else [],
     }
     return render(request, 'instructor/class_detail.html', context)
+
+
+@studio_login_required
+def class_booking_add(request, pk):
+    yoga_class = get_object_or_404(YogaClass, pk=pk, studio=request.studio)
+
+    if request.method != 'POST':
+        return redirect('instructor:class_detail', pk=yoga_class.pk)
+
+    form = BookingForm(request.POST, yoga_class=yoga_class)
+    if form.is_valid():
+        booking = form.save(commit=False)
+        booking.studio = request.studio
+        booking.save()
+        messages.success(
+            request,
+            _msg(
+                f'Booking for {booking.client_name} has been added.',
+                f'Booking for {booking.client_name} er tilfoejet.',
+            ),
+        )
+    else:
+        first_error = next(iter(form.errors.values()))[0] if form.errors else _msg('Invalid form data.', 'Ugyldige formulardata.')
+        messages.error(request, first_error)
+
+    return redirect('instructor:class_detail', pk=yoga_class.pk)
 
 
 @studio_login_required
@@ -661,11 +446,11 @@ def class_participant_quick_add(request, pk):
 
             client, created = Client.objects.get_or_create(
                 studio=root_class.studio,
-                email=email,
+                phone=phone,
                 defaults={
                     'studio': root_class.studio,
                     'name': name,
-                    'phone': phone,
+                    'email': email,
                 },
             )
 
@@ -676,6 +461,9 @@ def class_participant_quick_add(request, pk):
                     changed = True
                 if phone and phone != client.phone:
                     client.phone = phone
+                    changed = True
+                if email != client.email:
+                    client.email = email
                     changed = True
                 if changed:
                     client.save()

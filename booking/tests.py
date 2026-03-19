@@ -127,6 +127,16 @@ class BookingFlowTests(TestCase):
 		self.assertContains(response, 'public-studio-badge-image')
 		self.assertContains(response, '/media/studio-logos/studio')
 
+	def test_root_url_shows_public_landing_page_with_studio_link(self):
+		response = self.client.get(reverse('booking:public_home'))
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Yoga Platform')
+		self.assertContains(
+			response,
+			reverse('booking:class_list', kwargs={'studio_slug': self.yoga_class.studio.slug}),
+		)
+
 
 class WeeklyRecurrenceTests(TestCase):
 	def test_recurring_class_generates_next_two_upcoming_occurrences(self):
@@ -283,6 +293,77 @@ class WeeklyRecurrenceTests(TestCase):
 		self.assertEqual(Client.objects.filter(email='mette@example.com').count(), 1)
 		self.assertIn(existing_client, root_class.series_participants.all())
 
+	def test_instructor_can_add_manual_booking_from_class_detail(self):
+		user = get_user_model().objects.create_superuser(
+			username='booking-manager',
+			email='booking-manager@example.com',
+			password='test-pass-123',
+		)
+		self.client.force_login(user)
+
+		now = timezone.now()
+		yoga_class = YogaClass.objects.create(
+			title='Phone-call booking class',
+			short_description='Manual booking test',
+			description='Manual booking test description',
+			instructor_name='Zenia',
+			start_time=now + timedelta(days=1),
+			end_time=now + timedelta(days=1, hours=1),
+			capacity=10,
+			is_published=True,
+		)
+
+		response = self.client.post(
+			f'/instructor/classes/{yoga_class.pk}/bookings/add/',
+			data={
+				'client_name': 'Bente',
+				'client_phone': '28789658',
+				'client_email': 'bente@example.com',
+				'notes': 'Booked by phone call',
+			},
+		)
+
+		self.assertEqual(response.status_code, 302)
+		self.assertTrue(
+			Booking.objects.filter(
+				yoga_class=yoga_class,
+				client_phone='28789658',
+				client_name='Bente',
+			).exists()
+		)
+
+	def test_class_detail_manual_booking_modal_lists_existing_clients(self):
+		user = get_user_model().objects.create_superuser(
+			username='booking-manager-list',
+			email='booking-manager-list@example.com',
+			password='test-pass-123',
+		)
+		self.client.force_login(user)
+
+		now = timezone.now()
+		yoga_class = YogaClass.objects.create(
+			title='Client list booking class',
+			short_description='Manual booking list test',
+			description='Manual booking list test description',
+			instructor_name='Zenia',
+			start_time=now + timedelta(days=1),
+			end_time=now + timedelta(days=1, hours=1),
+			capacity=10,
+			is_published=True,
+		)
+		Client.objects.create(
+			studio=yoga_class.studio,
+			name='Bente Hansen',
+			email='bente@example.com',
+			phone='28789658',
+		)
+
+		response = self.client.get(f'/instructor/classes/{yoga_class.pk}/')
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'data-existing-client-select')
+		self.assertContains(response, 'Bente Hansen (28789658)')
+
 
 class InstructorClassFormTests(TestCase):
 	def test_danish_edit_form_renders_iso_value_for_date_input(self):
@@ -305,6 +386,44 @@ class InstructorClassFormTests(TestCase):
 			f'value="{timezone.localtime(now):%Y-%m-%d}"',
 			str(form['start_time'].subwidgets[0]),
 		)
+
+	def test_weekly_class_form_accepts_weekday_and_time_only(self):
+		form = YogaClassForm(data={
+			'title': 'Thursday Flow',
+			'short_description': 'Weekly evening yoga.',
+			'description': 'A recurring class.',
+			'instructor_name': 'Zenia',
+			'capacity': 10,
+			'location': 'Studio One',
+			'focus': 'Vinyasa',
+			'is_weekly_recurring': 'on',
+			'is_published': 'on',
+			'recurrence_weekday': '3',
+			'recurring_start_time': '18:00',
+			'recurring_end_time': '19:00',
+		})
+
+		self.assertTrue(form.is_valid(), form.errors)
+		self.assertEqual(form.cleaned_data['start_time'].weekday(), 3)
+		self.assertEqual(form.cleaned_data['start_time'].hour, 18)
+		self.assertEqual(form.cleaned_data['end_time'].hour, 19)
+		self.assertGreaterEqual(form.cleaned_data['start_time'], timezone.now())
+
+	def test_non_weekly_class_requires_explicit_date_time_fields(self):
+		form = YogaClassForm(data={
+			'title': 'One-off Flow',
+			'short_description': 'Single session.',
+			'description': 'A single class.',
+			'instructor_name': 'Zenia',
+			'capacity': 10,
+			'location': 'Studio One',
+			'focus': 'Slow flow',
+			'is_published': 'on',
+		})
+
+		self.assertFalse(form.is_valid())
+		self.assertIn('start_time', form.errors)
+		self.assertIn('end_time', form.errors)
 
 	def test_remove_participant_detaches_from_series(self):
 		user = get_user_model().objects.create_user(
@@ -941,7 +1060,7 @@ class StudioPortalTests(TestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertContains(response, 'Studio')
 
-	def test_owner_can_create_employee_access(self):
+	def test_non_superuser_owner_is_redirected_from_employee_pages(self):
 		self.client.force_login(self.owner)
 		response = self.client.post('/studio/employees/new/', data={
 			'username': 'new-employee',
@@ -954,16 +1073,10 @@ class StudioPortalTests(TestCase):
 		})
 
 		self.assertEqual(response.status_code, 302)
-		self.assertTrue(get_user_model().objects.filter(username='new-employee').exists())
-		self.assertTrue(
-			StudioMembership.objects.filter(
-				studio=self.studio,
-				user__username='new-employee',
-				role=StudioMembership.ROLE_STAFF,
-			).exists()
-		)
+		self.assertEqual(response.headers['Location'], '/instructor/')
+		self.assertFalse(get_user_model().objects.filter(username='new-employee').exists())
 
-	def test_owner_can_create_invoice_from_usage(self):
+	def test_non_superuser_owner_is_redirected_from_invoice_pages(self):
 		self.client.force_login(self.owner)
 		feature = Feature.objects.create(code='sms-reminders', name='SMS Reminders')
 		StudioFeatureAccess.objects.create(studio=self.studio, feature=feature, is_enabled=True)
@@ -988,5 +1101,17 @@ class StudioPortalTests(TestCase):
 		})
 
 		self.assertEqual(response.status_code, 302)
-		invoice = StudioInvoice.objects.get(studio=self.studio)
-		self.assertEqual(invoice.lines.count(), 3)
+		self.assertEqual(response.headers['Location'], '/instructor/')
+		self.assertFalse(StudioInvoice.objects.filter(studio=self.studio).exists())
+
+	def test_superuser_can_access_studio_portal_dashboard(self):
+		superuser = get_user_model().objects.create_superuser(
+			username='portal-admin',
+			email='portal-admin@example.com',
+			password='test-pass-123',
+		)
+		self.client.force_login(superuser)
+
+		response = self.client.get('/studio/')
+
+		self.assertEqual(response.status_code, 200)

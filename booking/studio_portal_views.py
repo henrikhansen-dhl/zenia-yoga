@@ -6,13 +6,14 @@ from django.utils.translation import get_language
 
 from .forms import StudioEmployeeAccessForm, StudioInvoiceCreateForm
 from .models import SmsReminderLog, StudioInvoice, StudioMembership
-from .studio_access import get_user_studio_role, studio_login_required, studio_role_required
+from .studio_access import get_user_studio_role, studio_login_required, studio_role_required, superuser_portal_required
 
 
 def _msg(english, danish):
     return danish if (get_language() or 'en').startswith('da') else english
 
 
+@superuser_portal_required
 @studio_login_required
 def dashboard(request):
     role = get_user_studio_role(request.user, request.studio)
@@ -32,6 +33,7 @@ def dashboard(request):
     return render(request, 'studio_portal/dashboard.html', context)
 
 
+@superuser_portal_required
 @studio_role_required(StudioMembership.ROLE_MANAGER)
 def employee_list(request):
     memberships = request.studio.memberships.select_related('user').all().order_by('user__username')
@@ -43,6 +45,7 @@ def employee_list(request):
     })
 
 
+@superuser_portal_required
 @studio_role_required(StudioMembership.ROLE_MANAGER)
 def employee_create(request):
     if request.method == 'POST':
@@ -67,6 +70,7 @@ def employee_create(request):
     })
 
 
+@superuser_portal_required
 @studio_role_required(StudioMembership.ROLE_MANAGER)
 def employee_edit(request, pk):
     membership = get_object_or_404(StudioMembership.objects.select_related('user', 'studio'), pk=pk, studio=request.studio)
@@ -93,6 +97,7 @@ def employee_edit(request, pk):
     })
 
 
+@superuser_portal_required
 @studio_role_required(StudioMembership.ROLE_MANAGER)
 def invoice_list(request):
     invoices = request.studio.invoices.prefetch_related('lines').all()
@@ -112,6 +117,7 @@ def invoice_list(request):
     })
 
 
+@superuser_portal_required
 @studio_role_required(StudioMembership.ROLE_MANAGER)
 def invoice_create(request):
     if request.method == 'POST':
@@ -136,6 +142,7 @@ def invoice_create(request):
     })
 
 
+@superuser_portal_required
 @studio_role_required(StudioMembership.ROLE_MANAGER)
 def invoice_detail(request, pk):
     invoice = get_object_or_404(

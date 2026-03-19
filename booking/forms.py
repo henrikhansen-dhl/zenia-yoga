@@ -1,4 +1,4 @@
-from datetime import datetime, time, timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from django import forms
@@ -58,8 +58,29 @@ class LocalizedSplitDateTimeField(forms.MultiValueField):
 
 
 class YogaClassForm(forms.ModelForm):
-    start_time = LocalizedSplitDateTimeField()
-    end_time = LocalizedSplitDateTimeField()
+    WEEKDAY_CHOICES = [
+        ('0', 'Monday'),
+        ('1', 'Tuesday'),
+        ('2', 'Wednesday'),
+        ('3', 'Thursday'),
+        ('4', 'Friday'),
+        ('5', 'Saturday'),
+        ('6', 'Sunday'),
+    ]
+
+    start_time = LocalizedSplitDateTimeField(required=False)
+    end_time = LocalizedSplitDateTimeField(required=False)
+    recurrence_weekday = forms.ChoiceField(choices=WEEKDAY_CHOICES, required=False)
+    recurring_start_time = forms.TimeField(
+        required=False,
+        input_formats=['%H:%M'],
+        widget=forms.TimeInput(attrs={'type': 'time', 'step': 300}, format='%H:%M'),
+    )
+    recurring_end_time = forms.TimeField(
+        required=False,
+        input_formats=['%H:%M'],
+        widget=forms.TimeInput(attrs={'type': 'time', 'step': 300}, format='%H:%M'),
+    )
 
     class Meta:
         model = YogaClass
@@ -90,6 +111,9 @@ class YogaClassForm(forms.ModelForm):
             'focus': 'Fokus' if is_danish else 'Focus',
             'cover_image': 'Billede' if is_danish else 'Cover image',
             'is_weekly_recurring': 'Gentages hver uge' if is_danish else 'Repeats weekly',
+            'recurrence_weekday': 'Ugedag' if is_danish else 'Weekday',
+            'recurring_start_time': 'Fra tid' if is_danish else 'From time',
+            'recurring_end_time': 'Til tid' if is_danish else 'To time',
             'is_published': 'Synlig på bookingsiden' if is_danish else 'Visible on the booking page',
         }
         placeholders = {
@@ -116,6 +140,30 @@ class YogaClassForm(forms.ModelForm):
             self.fields[field_name].widget.widgets[0].attrs.update({'lang': language, 'class': 'date-input'})
             self.fields[field_name].widget.widgets[1].attrs.update({'lang': language, 'class': 'time-input'})
 
+        self.fields['recurrence_weekday'].widget.attrs.update({'lang': language})
+        self.fields['recurring_start_time'].widget.attrs.update({'lang': language, 'class': 'time-input'})
+        self.fields['recurring_end_time'].widget.attrs.update({'lang': language, 'class': 'time-input'})
+
+        weekday_labels = {
+            '0': 'Mandag' if is_danish else 'Monday',
+            '1': 'Tirsdag' if is_danish else 'Tuesday',
+            '2': 'Onsdag' if is_danish else 'Wednesday',
+            '3': 'Torsdag' if is_danish else 'Thursday',
+            '4': 'Fredag' if is_danish else 'Friday',
+            '5': 'Lørdag' if is_danish else 'Saturday',
+            '6': 'Søndag' if is_danish else 'Sunday',
+        }
+        self.fields['recurrence_weekday'].choices = [
+            (value, label) for value, label in weekday_labels.items()
+        ]
+
+        if self.instance and self.instance.pk and self.instance.is_weekly_recurring and not self.instance.recurrence_parent_id:
+            start_local = timezone.localtime(self.instance.start_time)
+            end_local = timezone.localtime(self.instance.end_time)
+            self.initial.setdefault('recurrence_weekday', str(start_local.weekday()))
+            self.initial.setdefault('recurring_start_time', start_local.time().replace(second=0, microsecond=0))
+            self.initial.setdefault('recurring_end_time', end_local.time().replace(second=0, microsecond=0))
+
         self.fields['capacity'].widget.attrs['min'] = 1
         self.fields['is_weekly_recurring'].help_text = (
             'Systemet opretter automatisk de 2 næste kommende uger for dette hold.'
@@ -134,6 +182,96 @@ class YogaClassForm(forms.ModelForm):
             'The class appears on the public booking page.'
         )
 
+    def _next_weekday_date(self, from_date, weekday):
+        day_delta = (weekday - from_date.weekday()) % 7
+        return from_date + timedelta(days=day_delta)
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        is_weekly_recurring = cleaned_data.get('is_weekly_recurring')
+        is_generated_occurrence = bool(self.instance and self.instance.recurrence_parent_id)
+
+        if is_weekly_recurring and not is_generated_occurrence:
+            weekday_value = cleaned_data.get('recurrence_weekday')
+            recurring_start_time = cleaned_data.get('recurring_start_time')
+            recurring_end_time = cleaned_data.get('recurring_end_time')
+
+            if weekday_value in (None, ''):
+                self.add_error(
+                    'recurrence_weekday',
+                    'Vælg en ugedag.'
+                    if (get_language() or 'en').startswith('da')
+                    else 'Choose a weekday.',
+                )
+
+            if recurring_start_time is None:
+                self.add_error(
+                    'recurring_start_time',
+                    'Vælg starttid.'
+                    if (get_language() or 'en').startswith('da')
+                    else 'Choose a start time.',
+                )
+
+            if recurring_end_time is None:
+                self.add_error(
+                    'recurring_end_time',
+                    'Vælg sluttid.'
+                    if (get_language() or 'en').startswith('da')
+                    else 'Choose an end time.',
+                )
+
+            if self.errors:
+                return cleaned_data
+
+            if recurring_end_time <= recurring_start_time:
+                self.add_error(
+                    'recurring_end_time',
+                    'Sluttid skal være efter starttid.'
+                    if (get_language() or 'en').startswith('da')
+                    else 'End time must be after start time.',
+                )
+                return cleaned_data
+
+            now_local = timezone.localtime()
+            next_date = self._next_weekday_date(now_local.date(), int(weekday_value))
+
+            recurring_start = timezone.make_aware(
+                datetime.combine(next_date, recurring_start_time),
+                timezone.get_current_timezone(),
+            )
+            recurring_end = timezone.make_aware(
+                datetime.combine(next_date, recurring_end_time),
+                timezone.get_current_timezone(),
+            )
+
+            if recurring_start < timezone.now():
+                recurring_start = recurring_start + timedelta(days=7)
+                recurring_end = recurring_end + timedelta(days=7)
+
+            cleaned_data['start_time'] = recurring_start
+            cleaned_data['end_time'] = recurring_end
+            return cleaned_data
+
+        start_time = cleaned_data.get('start_time')
+        end_time = cleaned_data.get('end_time')
+        if start_time is None:
+            self.add_error(
+                'start_time',
+                'Vælg startdato og tid.'
+                if (get_language() or 'en').startswith('da')
+                else 'Choose a start date and time.',
+            )
+        if end_time is None:
+            self.add_error(
+                'end_time',
+                'Vælg slutdato og tid.'
+                if (get_language() or 'en').startswith('da')
+                else 'Choose an end date and time.',
+            )
+
+        return cleaned_data
+
 
 class BookingForm(forms.ModelForm):
     class Meta:
@@ -142,7 +280,7 @@ class BookingForm(forms.ModelForm):
         widgets = {
             'client_name': forms.TextInput(attrs={'placeholder': 'Your full name'}),
             'client_email': forms.EmailInput(attrs={'placeholder': 'you@example.com'}),
-            'client_phone': forms.TextInput(attrs={'placeholder': 'Optional phone number'}),
+            'client_phone': forms.TextInput(attrs={'placeholder': 'Phone number'}),
             'notes': forms.Textarea(attrs={'rows': 4, 'placeholder': 'Anything the instructor should know?'}),
         }
 
@@ -162,20 +300,32 @@ class BookingForm(forms.ModelForm):
         )
         self.fields['client_email'].widget.attrs['placeholder'] = 'you@example.com'
         self.fields['client_phone'].widget.attrs['placeholder'] = (
-            'Valgfrit telefonnummer' if is_danish else 'Optional phone number'
+            'Telefonnummer' if is_danish else 'Phone number'
         )
         self.fields['notes'].widget.attrs['placeholder'] = (
             'Noget underviseren skal vide?' if is_danish else 'Anything the instructor should know?'
         )
+        self.fields['client_email'].required = False
+        self.fields['client_phone'].required = True
 
     def clean_client_email(self):
-        return self.cleaned_data['client_email'].strip().lower()
+        return (self.cleaned_data.get('client_email') or '').strip().lower()
+
+    def clean_client_phone(self):
+        phone = (self.cleaned_data.get('client_phone') or '').strip()
+        if not phone:
+            raise forms.ValidationError(
+                'Telefonnummer er påkrævet.'
+                if (get_language() or 'en').startswith('da')
+                else 'Phone number is required.'
+            )
+        return phone
 
     def clean(self):
         cleaned_data = super().clean()
-        email = cleaned_data.get('client_email')
+        phone = cleaned_data.get('client_phone')
 
-        if not self.yoga_class or not email:
+        if not self.yoga_class or not phone:
             return cleaned_data
 
         if not self.yoga_class.is_bookable:
@@ -185,12 +335,12 @@ class BookingForm(forms.ModelForm):
                 else 'This class is not available for booking anymore.'
             )
 
-        if self.yoga_class.bookings.filter(client_email__iexact=email).exists():
+        if self.yoga_class.bookings.filter(client_phone=phone).exists():
             self.add_error(
-                'client_email',
-                'Denne e-mail er allerede booket til holdet.'
+                'client_phone',
+                'Dette telefonnummer er allerede booket til holdet.'
                 if (get_language() or 'en').startswith('da')
-                else 'This email is already booked for the class.',
+                else 'This phone number is already booked for the class.',
             )
 
         return cleaned_data
@@ -232,8 +382,10 @@ class ClientForm(forms.ModelForm):
         self.fields['name'].widget.attrs['placeholder'] = 'Klientens navn' if is_danish else 'Client name'
         self.fields['email'].widget.attrs['placeholder'] = 'client@example.com'
         self.fields['phone'].widget.attrs['placeholder'] = (
-            'Telefonnummer (valgfrit)' if is_danish else 'Phone number (optional)'
+            'Telefonnummer' if is_danish else 'Phone number'
         )
+        self.fields['email'].required = False
+        self.fields['phone'].required = True
 
         self.fields['reminder_classes'].queryset = YogaClass.objects.filter(
             studio=self.studio,
@@ -250,7 +402,17 @@ class ClientForm(forms.ModelForm):
         )
 
     def clean_email(self):
-        return self.cleaned_data['email'].strip().lower()
+        return (self.cleaned_data.get('email') or '').strip().lower()
+
+    def clean_phone(self):
+        phone = (self.cleaned_data.get('phone') or '').strip()
+        if not phone:
+            raise forms.ValidationError(
+                'Telefonnummer er påkrævet.'
+                if (get_language() or 'en').startswith('da')
+                else 'Phone number is required.'
+            )
+        return phone
 
     @staticmethod
     def _class_choice_label(yoga_class, is_danish):
@@ -288,8 +450,8 @@ class WeeklyParticipantsForm(forms.Form):
 
 class WeeklyParticipantQuickAddForm(forms.Form):
     name = forms.CharField(max_length=120)
-    email = forms.EmailField(max_length=254)
-    phone = forms.CharField(max_length=40, required=False)
+    email = forms.EmailField(max_length=254, required=False)
+    phone = forms.CharField(max_length=40)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -303,11 +465,21 @@ class WeeklyParticipantQuickAddForm(forms.Form):
         self.fields['name'].widget.attrs['placeholder'] = 'Klientens navn' if is_danish else 'Client name'
         self.fields['email'].widget.attrs['placeholder'] = 'client@example.com'
         self.fields['phone'].widget.attrs['placeholder'] = (
-            'Telefonnummer (valgfrit)' if is_danish else 'Phone number (optional)'
+            'Telefonnummer' if is_danish else 'Phone number'
         )
 
     def clean_email(self):
-        return self.cleaned_data['email'].strip().lower()
+        return (self.cleaned_data.get('email') or '').strip().lower()
+
+    def clean_phone(self):
+        phone = (self.cleaned_data.get('phone') or '').strip()
+        if not phone:
+            raise forms.ValidationError(
+                'Telefonnummer er påkrævet.'
+                if (get_language() or 'en').startswith('da')
+                else 'Phone number is required.'
+            )
+        return phone
 
 
 class StudioForm(forms.ModelForm):

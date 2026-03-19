@@ -66,6 +66,10 @@ SMS_GATEWAY_FROM=ZeniaYoga
 SMS_GATEWAY_LANGUAGE=da
 SMS_GATEWAY_DEFAULT_COUNTRY_CODE=45
 SMS_GATEWAY_TIMEOUT_SECONDS=15
+
+# Full public URL of the site — included in SMS booking links.
+# Must be set for the scheduled reminder task to build correct links.
+SITE_URL=https://henrikhansen.pythonanywhere.com
 ```
 
 ## 5) Prepare data and media
@@ -204,6 +208,67 @@ Then ensure `db.sqlite3` exists in `/home/henrikhansen/yoga-platforms/` and run:
 cd /home/henrikhansen/yoga-platforms
 source .venv/bin/activate
 python manage.py migrate
+```
+
+## 12) Scheduled task: daily SMS reminders
+
+The management command `send_daily_reminders` sends class reminders automatically.
+It is designed to run as a **PythonAnywhere Scheduled Task** — one task per studio.
+
+### Prerequisites
+
+- `SMS_GATEWAY_ENABLED=True` in `.env`
+- `SITE_URL` set to your full public URL in `.env` (see step 4)
+- Studio database exists and is provisioned (see `provision_studio_db`)
+
+### Test it first (dry run)
+
+Open a Bash console and verify who would receive a reminder:
+
+```bash
+cd /home/henrikhansen/yoga-platforms
+source .venv/bin/activate
+python manage.py send_daily_reminders --studio zenia-yoga --dry-run
+python manage.py send_daily_reminders --studio karin-meditation --dry-run
+```
+
+Send manually once to confirm gateway works:
+
+```bash
+python manage.py send_daily_reminders --studio zenia-yoga
+```
+
+### Set up scheduled tasks
+
+1. Open the **Tasks** tab on PythonAnywhere.
+2. For each studio add a **Daily** task at your chosen time (e.g. 07:00).
+3. Use the command exactly as shown:
+
+**Studio: zenia-yoga — runs at 07:00**
+```
+/home/henrikhansen/yoga-platforms/.venv/bin/python /home/henrikhansen/yoga-platforms/manage.py send_daily_reminders --studio zenia-yoga
+```
+
+**Studio: karin-meditation — runs at 07:00**
+```
+/home/henrikhansen/yoga-platforms/.venv/bin/python /home/henrikhansen/yoga-platforms/manage.py send_daily_reminders --studio karin-meditation
+```
+
+Both tasks can run at the same time — they work independently and use separate database connections.
+
+### What the task does each day
+
+1. Finds clients on the `reminder_classes` list (class-interest reminders) for upcoming published classes.
+2. Finds clients in a weekly series (`series_participants`) whose class is **today** and who have **not yet booked a spot**.
+3. Sends an SMS to each person with a direct booking link.
+4. Logs every attempt to `SmsReminderLog` (viewable in the SMS log popup in the instructor interface).
+
+### Changing the SMS language
+
+Default language is set by `SMS_GATEWAY_LANGUAGE` in `.env`. Override per task with `--lang`:
+
+```
+... send_daily_reminders --studio zenia-yoga --lang en
 ```
 
 

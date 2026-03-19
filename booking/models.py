@@ -400,8 +400,8 @@ class Client(models.Model):
 		db_constraint=False,
 	)
 	name = models.CharField(max_length=120)
-	email = models.EmailField()
-	phone = models.CharField(max_length=40, blank=True)
+	email = models.EmailField(blank=True)
+	phone = models.CharField(max_length=40)
 	reminder_classes = models.ManyToManyField(
 		YogaClass,
 		blank=True,
@@ -410,24 +410,31 @@ class Client(models.Model):
 	created_at = models.DateTimeField(auto_now_add=True)
 
 	class Meta:
-		ordering = ['name', 'email']
+		ordering = ['name', 'phone']
 		constraints = [
 			models.UniqueConstraint(
-				fields=['studio', 'email'],
-				name='unique_client_email_per_studio',
+				fields=['studio', 'phone'],
+				condition=models.Q(phone__gt=''),
+				name='unique_client_phone_per_studio',
 			),
 		]
 
 	def __str__(self):
-		return f"{self.name} ({self.email})"
+		if self.email:
+			return f"{self.name} ({self.email})"
+		return f"{self.name} ({self.phone})"
 
 	def clean(self):
-		self.email = self.email.strip().lower()
+		self.email = (self.email or '').strip().lower()
+		self.phone = (self.phone or '').strip()
+		if not self.phone:
+			raise ValidationError('Phone is required for clients.')
 
 	def save(self, *args, **kwargs):
 		if not self.studio_id:
 			self.studio = Studio.get_default()
-		self.email = self.email.strip().lower()
+		self.email = (self.email or '').strip().lower()
+		self.phone = (self.phone or '').strip()
 		self.full_clean()
 		super().save(*args, **kwargs)
 
@@ -456,7 +463,7 @@ class SmsReminderLog(models.Model):
 		related_name='sms_logs',
 	)
 	client_name = models.CharField(max_length=120)
-	client_email = models.EmailField()
+	client_email = models.EmailField(blank=True)
 	raw_phone = models.CharField(max_length=40, blank=True)
 	normalized_phone = models.CharField(max_length=40, blank=True)
 	message_language = models.CharField(max_length=5, default='da')
@@ -496,8 +503,8 @@ class Booking(models.Model):
 		related_name='bookings',
 	)
 	client_name = models.CharField(max_length=120)
-	client_email = models.EmailField()
-	client_phone = models.CharField(max_length=40, blank=True)
+	client_email = models.EmailField(blank=True)
+	client_phone = models.CharField(max_length=40)
 	notes = models.TextField(blank=True)
 	created_at = models.DateTimeField(auto_now_add=True)
 
@@ -505,8 +512,9 @@ class Booking(models.Model):
 		ordering = ['created_at']
 		constraints = [
 			models.UniqueConstraint(
-				fields=['yoga_class', 'client_email'],
-				name='unique_booking_email_per_class',
+				fields=['yoga_class', 'client_phone'],
+				condition=models.Q(client_phone__gt=''),
+				name='unique_booking_phone_per_class',
 			)
 		]
 
@@ -535,6 +543,7 @@ class Booking(models.Model):
 			self.studio_id = self.yoga_class.studio_id
 		elif not self.studio_id:
 			self.studio = Studio.get_default()
-		self.client_email = self.client_email.strip().lower()
+		self.client_email = (self.client_email or '').strip().lower()
+		self.client_phone = (self.client_phone or '').strip()
 		self.full_clean()
 		super().save(*args, **kwargs)

@@ -10,110 +10,144 @@
         <h1>{% if request.LANGUAGE_CODE == 'da' %}Deltagere{% else %}Clients{% endif %}</h1>
     </div>
     <div class="client-header-actions">
-        <form method="post" action="{% url 'instructor:send_sms_reminders' %}">
-            {% csrf_token %}
-            <button class="button-primary" type="submit">{% if request.LANGUAGE_CODE == 'da' %}Send SMS-påmindelser{% else %}Send SMS reminders{% endif %}</button>
-        </form>
-        <a class="button-secondary" href="{% url 'instructor:export_sms_reminders' %}">{% if request.LANGUAGE_CODE == 'da' %}Eksporter SMS-påmindelser{% else %}Export SMS reminders{% endif %}</a>
-        <div class="stat-card">
-            <p class="stat-label">{% if request.LANGUAGE_CODE == 'da' %}I alt{% else %}Total{% endif %}</p>
-            <p class="stat-value">{{ client_count }}</p>
+        <div class="client-header-toolbar">
+            <button class="button-secondary button-secondary-compact" type="button" data-open-client-modal>
+                {% if request.LANGUAGE_CODE == 'da' %}Tilføj klient{% else %}Add client{% endif %}
+            </button>
+            <button class="button-secondary button-secondary-compact" type="button" data-open-sms-log-modal>
+                {% if request.LANGUAGE_CODE == 'da' %}SMS-log{% else %}SMS log{% endif %}
+            </button>
+            <form method="post" action="{% url 'instructor:send_sms_reminders' %}" class="inline-form">
+                {% csrf_token %}
+                <button class="button-primary button-secondary-compact" type="submit">{% if request.LANGUAGE_CODE == 'da' %}Send SMS{% else %}Send SMS{% endif %}</button>
+            </form>
+            <a class="button-secondary button-secondary-compact" href="{% url 'instructor:export_sms_reminders' %}">{% if request.LANGUAGE_CODE == 'da' %}Eksporter{% else %}Export{% endif %}</a>
+        </div>
+        <div class="client-total-badge" aria-label="{% if request.LANGUAGE_CODE == 'da' %}Antal klienter{% else %}Total clients{% endif %}">
+            <span class="client-total-badge-label">{% if request.LANGUAGE_CODE == 'da' %}I alt{% else %}Total{% endif %}</span>
+            <span class="client-total-badge-value">{{ client_count }}</span>
         </div>
     </div>
 </div>
 
-<section class="instr-section">
-    <div class="instr-card client-form-card">
-        <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Manuel oprettelse{% else %}Manual entry{% endif %}</p>
-        <h2>{% if request.LANGUAGE_CODE == 'da' %}Tilføj klient til påmindelser{% else %}Add client for reminders{% endif %}</h2>
+<div class="client-modal-backdrop" data-client-modal hidden>
+    <div class="client-modal" role="dialog" aria-modal="true" aria-labelledby="client-modal-title">
+        <button class="client-modal-close" type="button" aria-label="{% if request.LANGUAGE_CODE == 'da' %}Luk{% else %}Close{% endif %}" data-close-client-modal>
+            &times;
+        </button>
+        <div class="instr-card client-form-card">
+            <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Manuel oprettelse{% else %}Manual entry{% endif %}</p>
+            <h2 id="client-modal-title">{% if request.LANGUAGE_CODE == 'da' %}Tilføj klient til påmindelser{% else %}Add client for reminders{% endif %}</h2>
 
-        <form method="post" class="client-form-grid">
-            {% csrf_token %}
+            <form method="post" class="client-form-grid">
+                {% csrf_token %}
 
-            {% if form.non_field_errors %}
-                <div class="form-errors">{{ form.non_field_errors }}</div>
+                {% if form.non_field_errors %}
+                    <div class="form-errors">{{ form.non_field_errors }}</div>
+                {% endif %}
+
+                <div class="form-row">
+                    <label for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
+                    {{ form.name }}
+                    {% if form.name.errors %}<div class="field-error">{{ form.name.errors|join:', ' }}</div>{% endif %}
+                </div>
+
+                <div class="form-row">
+                    <label for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
+                    {{ form.email }}
+                    {% if form.email.errors %}<div class="field-error">{{ form.email.errors|join:', ' }}</div>{% endif %}
+                </div>
+
+                <div class="form-row">
+                    <label for="{{ form.phone.id_for_label }}">{{ form.phone.label }}</label>
+                    {{ form.phone }}
+                    {% if form.phone.errors %}<div class="field-error">{{ form.phone.errors|join:', ' }}</div>{% endif %}
+                </div>
+
+                <div class="form-row">
+                    <label for="{{ form.reminder_classes.id_for_label }}">{{ form.reminder_classes.label }}</label>
+                    {{ form.reminder_classes }}
+                    {% if form.reminder_classes.help_text %}<p class="field-help">{{ form.reminder_classes.help_text }}</p>{% endif %}
+                    {% if form.reminder_classes.errors %}<div class="field-error">{{ form.reminder_classes.errors|join:', ' }}</div>{% endif %}
+                </div>
+
+                <div class="instr-form-actions">
+                    <button class="button-primary" type="submit">{% if request.LANGUAGE_CODE == 'da' %}Gem klient{% else %}Save client{% endif %}</button>
+                    <button class="button-secondary" type="button" data-close-client-modal>{% if request.LANGUAGE_CODE == 'da' %}Annuller{% else %}Cancel{% endif %}</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="client-modal-backdrop" data-sms-log-modal hidden>
+    <div class="client-modal sms-log-modal" role="dialog" aria-modal="true" aria-labelledby="sms-log-modal-title">
+        <button class="client-modal-close" type="button" aria-label="{% if request.LANGUAGE_CODE == 'da' %}Luk{% else %}Close{% endif %}" data-close-sms-log-modal>
+            &times;
+        </button>
+        <div class="instr-card">
+            <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}SMS-log{% else %}SMS log{% endif %}</p>
+            <h2 id="sms-log-modal-title">{% if request.LANGUAGE_CODE == 'da' %}Seneste leveringer{% else %}Recent deliveries{% endif %}</h2>
+
+            {% if recent_sms_logs %}
+            <div class="sms-log-filters" role="toolbar" aria-label="{% if request.LANGUAGE_CODE == 'da' %}Filtrer SMS-log{% else %}Filter SMS log{% endif %}">
+                <button class="button-secondary button-compact is-active" type="button" data-sms-log-filter="all">{% if request.LANGUAGE_CODE == 'da' %}Alle{% else %}All{% endif %}</button>
+                <button class="button-secondary button-compact" type="button" data-sms-log-filter="sent">{% if request.LANGUAGE_CODE == 'da' %}Sendt{% else %}Sent{% endif %}</button>
+                <button class="button-secondary button-compact" type="button" data-sms-log-filter="failed">{% if request.LANGUAGE_CODE == 'da' %}Fejl{% else %}Failed{% endif %}</button>
+            </div>
+            <p class="instr-empty sms-log-empty" data-sms-log-empty hidden>{% if request.LANGUAGE_CODE == 'da' %}Ingen loglinjer matcher dette filter.{% else %}No log entries match this filter.{% endif %}</p>
+            <div class="sms-log-table-wrap">
+                <table class="instr-table instr-table-compact">
+                    <thead>
+                        <tr>
+                            <th>{% if request.LANGUAGE_CODE == 'da' %}Tid{% else %}Time{% endif %}</th>
+                            <th>{% if request.LANGUAGE_CODE == 'da' %}Klient{% else %}Client{% endif %}</th>
+                            <th>{% if request.LANGUAGE_CODE == 'da' %}Telefon{% else %}Phone{% endif %}</th>
+                            <th>{% if request.LANGUAGE_CODE == 'da' %}Hold{% else %}Class{% endif %}</th>
+                            <th>{% if request.LANGUAGE_CODE == 'da' %}Status{% else %}Status{% endif %}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in recent_sms_logs %}
+                        <tr data-sms-log-row data-sms-status="{{ log.status }}">
+                            <td>{{ log.created_at|date:'d M, H:i' }}</td>
+                            <td>
+                                <strong>{{ log.client_name }}</strong>
+                                <p class="client-email">{{ log.client_email }}</p>
+                            </td>
+                            <td>{{ log.normalized_phone|default:log.raw_phone }}</td>
+                            <td>
+                                {% if log.yoga_class_id %}
+                                    <a class="table-link" href="{% url 'instructor:class_detail' log.yoga_class_id %}">{{ log.class_title }}</a>
+                                {% else %}
+                                    {{ log.class_title }}
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if log.status == 'sent' %}
+                                    <span class="pill pill-green">{% if request.LANGUAGE_CODE == 'da' %}Sendt{% else %}Sent{% endif %}</span>
+                                {% elif log.status == 'failed' %}
+                                    <span class="pill pill-red">{% if request.LANGUAGE_CODE == 'da' %}Fejl{% else %}Failed{% endif %}</span>
+                                    {% if log.gateway_error %}<p class="client-email">{{ log.gateway_error }}</p>{% endif %}
+                                {% else %}
+                                    <span class="pill pill-grey">{{ log.status }}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="instr-empty">{% if request.LANGUAGE_CODE == 'da' %}Ingen SMS-log endnu.{% else %}No SMS log entries yet.{% endif %}</p>
             {% endif %}
 
-            <div class="form-row">
-                <label for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>
-                {{ form.name }}
-                {% if form.name.errors %}<div class="field-error">{{ form.name.errors|join:', ' }}</div>{% endif %}
-            </div>
-
-            <div class="form-row">
-                <label for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
-                {{ form.email }}
-                {% if form.email.errors %}<div class="field-error">{{ form.email.errors|join:', ' }}</div>{% endif %}
-            </div>
-
-            <div class="form-row">
-                <label for="{{ form.phone.id_for_label }}">{{ form.phone.label }}</label>
-                {{ form.phone }}
-                {% if form.phone.errors %}<div class="field-error">{{ form.phone.errors|join:', ' }}</div>{% endif %}
-            </div>
-
-            <div class="form-row">
-                <label for="{{ form.reminder_classes.id_for_label }}">{{ form.reminder_classes.label }}</label>
-                {{ form.reminder_classes }}
-                {% if form.reminder_classes.help_text %}<p class="field-help">{{ form.reminder_classes.help_text }}</p>{% endif %}
-                {% if form.reminder_classes.errors %}<div class="field-error">{{ form.reminder_classes.errors|join:', ' }}</div>{% endif %}
-            </div>
-
             <div class="instr-form-actions">
-                <button class="button-primary" type="submit">{% if request.LANGUAGE_CODE == 'da' %}Gem klient{% else %}Save client{% endif %}</button>
+                <button class="button-secondary" type="button" data-close-sms-log-modal>{% if request.LANGUAGE_CODE == 'da' %}Luk{% else %}Close{% endif %}</button>
             </div>
-        </form>
+        </div>
     </div>
-</section>
-
-{% if recent_sms_logs %}
-<section class="instr-section">
-    <div class="instr-card">
-        <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}SMS-log{% else %}SMS log{% endif %}</p>
-        <h2>{% if request.LANGUAGE_CODE == 'da' %}Seneste leveringer{% else %}Recent deliveries{% endif %}</h2>
-        <table class="instr-table instr-table-compact">
-            <thead>
-                <tr>
-                    <th>{% if request.LANGUAGE_CODE == 'da' %}Tid{% else %}Time{% endif %}</th>
-                    <th>{% if request.LANGUAGE_CODE == 'da' %}Klient{% else %}Client{% endif %}</th>
-                    <th>{% if request.LANGUAGE_CODE == 'da' %}Telefon{% else %}Phone{% endif %}</th>
-                    <th>{% if request.LANGUAGE_CODE == 'da' %}Hold{% else %}Class{% endif %}</th>
-                    <th>{% if request.LANGUAGE_CODE == 'da' %}Status{% else %}Status{% endif %}</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for log in recent_sms_logs %}
-                <tr>
-                    <td>{{ log.created_at|date:'d M, H:i' }}</td>
-                    <td>
-                        <strong>{{ log.client_name }}</strong>
-                        <p class="client-email">{{ log.client_email }}</p>
-                    </td>
-                    <td>{{ log.normalized_phone|default:log.raw_phone }}</td>
-                    <td>
-                        {% if log.yoga_class_id %}
-                            <a class="table-link" href="{% url 'instructor:class_detail' log.yoga_class_id %}">{{ log.class_title }}</a>
-                        {% else %}
-                            {{ log.class_title }}
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if log.status == 'sent' %}
-                            <span class="pill pill-green">{% if request.LANGUAGE_CODE == 'da' %}Sendt{% else %}Sent{% endif %}</span>
-                        {% elif log.status == 'failed' %}
-                            <span class="pill pill-red">{% if request.LANGUAGE_CODE == 'da' %}Fejl{% else %}Failed{% endif %}</span>
-                            {% if log.gateway_error %}<p class="client-email">{{ log.gateway_error }}</p>{% endif %}
-                        {% else %}
-                            <span class="pill pill-grey">{{ log.status }}</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</section>
-{% endif %}
+</div>
 
 {% if clients %}
 <section class="instr-section">
@@ -132,7 +166,9 @@
             <tr>
                 <td>
                     <strong>{{ client.name }}</strong>
+                    {% if client.email %}
                     <p class="client-email">{{ client.email }}</p>
+                    {% endif %}
                 </td>
                 <td>
                     {% if client.phone %}
@@ -190,4 +226,108 @@
     <p>{% if request.LANGUAGE_CODE == 'da' %}Når deltagere booker hold, vises de automatisk her.{% else %}Clients will appear here automatically when they book a class.{% endif %}</p>
 </div>
 {% endif %}
+
+<script>
+    (function () {
+        function setupModal(options) {
+            const modalBackdrop = document.querySelector(options.backdropSelector);
+            const openButtons = document.querySelectorAll(options.openSelector);
+            const closeButtons = document.querySelectorAll(options.closeSelector);
+            if (!modalBackdrop) {
+                return;
+            }
+
+            const closeDelayMs = 180;
+            let closeTimer = null;
+
+            function openModal() {
+                if (closeTimer) {
+                    window.clearTimeout(closeTimer);
+                    closeTimer = null;
+                }
+                modalBackdrop.hidden = false;
+                window.requestAnimationFrame(function () {
+                    modalBackdrop.classList.add('is-visible');
+                });
+                document.body.classList.add('modal-open');
+            }
+
+            function closeModal() {
+                modalBackdrop.classList.remove('is-visible');
+                document.body.classList.remove('modal-open');
+                closeTimer = window.setTimeout(function () {
+                    modalBackdrop.hidden = true;
+                }, closeDelayMs);
+            }
+
+            openButtons.forEach((btn) => {
+                btn.addEventListener('click', openModal);
+            });
+
+            closeButtons.forEach((btn) => {
+                btn.addEventListener('click', closeModal);
+            });
+
+            modalBackdrop.addEventListener('click', function (event) {
+                if (event.target === modalBackdrop) {
+                    closeModal();
+                }
+            });
+
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape' && !modalBackdrop.hidden) {
+                    closeModal();
+                }
+            });
+
+            if (options.openOnInit) {
+                openModal();
+            }
+        }
+
+        setupModal({
+            backdropSelector: '[data-client-modal]',
+            openSelector: '[data-open-client-modal]',
+            closeSelector: '[data-close-client-modal]',
+            openOnInit: {{ form.errors|yesno:'true,false' }},
+        });
+
+        setupModal({
+            backdropSelector: '[data-sms-log-modal]',
+            openSelector: '[data-open-sms-log-modal]',
+            closeSelector: '[data-close-sms-log-modal]',
+            openOnInit: false,
+        });
+
+        const filterButtons = document.querySelectorAll('[data-sms-log-filter]');
+        const logRows = document.querySelectorAll('[data-sms-log-row]');
+        const emptyState = document.querySelector('[data-sms-log-empty]');
+
+        function applySmsLogFilter(filterValue) {
+            let visibleCount = 0;
+
+            logRows.forEach((row) => {
+                const matches = filterValue === 'all' || row.getAttribute('data-sms-status') === filterValue;
+                row.style.display = matches ? '' : 'none';
+                if (matches) {
+                    visibleCount += 1;
+                }
+            });
+
+            filterButtons.forEach((button) => {
+                button.classList.toggle('is-active', button.getAttribute('data-sms-log-filter') === filterValue);
+            });
+
+            if (emptyState) {
+                emptyState.hidden = visibleCount > 0;
+            }
+        }
+
+        filterButtons.forEach((button) => {
+            button.addEventListener('click', function () {
+                applySmsLogFilter(button.getAttribute('data-sms-log-filter'));
+            });
+        });
+    })();
+</script>
 {% endblock %}

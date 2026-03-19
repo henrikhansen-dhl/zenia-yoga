@@ -12,6 +12,28 @@
     <a class="button-primary" href="{% url 'instructor:class_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Nyt hold{% else %}+ New class{% endif %}</a>
 </div>
 
+<section class="class-type-legend" aria-label="{% if request.LANGUAGE_CODE == 'da' %}Forklaring af holdtyper{% else %}Class type legend{% endif %}">
+    <p class="class-type-legend-title">{% if request.LANGUAGE_CODE == 'da' %}Tip: Rediger den ugentlige master for at ændre hele serien{% else %}Tip: Edit the weekly master to update the full series{% endif %}</p>
+    <div class="class-type-legend-items">
+        <span class="class-type-legend-item">
+            <span class="pill pill-blue">{% if request.LANGUAGE_CODE == 'da' %}Ugentlig master{% else %}Weekly master{% endif %}</span>
+            <span>{% if request.LANGUAGE_CODE == 'da' %}Hovedholdet du redigerer{% else %}The main class record to edit{% endif %}</span>
+        </span>
+        <span class="class-type-legend-item">
+            <span class="pill pill-amber">{% if request.LANGUAGE_CODE == 'da' %}Genereret forekomst{% else %}Generated occurrence{% endif %}</span>
+            <span>{% if request.LANGUAGE_CODE == 'da' %}Automatisk oprettet uge{% else %}Auto-created weekly instance{% endif %}</span>
+        </span>
+        <span class="class-type-legend-item">
+            <span class="pill pill-grey">{% if request.LANGUAGE_CODE == 'da' %}Enkelt hold{% else %}Single class{% endif %}</span>
+            <span>{% if request.LANGUAGE_CODE == 'da' %}Ikke del af en serie{% else %}Not part of a recurring series{% endif %}</span>
+        </span>
+    </div>
+    <label class="class-list-filter-toggle" for="masters-only-toggle">
+        <input id="masters-only-toggle" type="checkbox">
+        <span>{% if request.LANGUAGE_CODE == 'da' %}Vis kun ugentlige masters{% else %}Show only weekly masters{% endif %}</span>
+    </label>
+</section>
+
 {% if upcoming %}
 <section class="instr-section">
     <h2>{% if request.LANGUAGE_CODE == 'da' %}Kommende{% else %}Upcoming{% endif %}</h2>
@@ -20,6 +42,7 @@
             <tr>
                 <th>{% if request.LANGUAGE_CODE == 'da' %}Hold{% else %}Class{% endif %}</th>
                 <th>{% if request.LANGUAGE_CODE == 'da' %}Dato &amp; tid{% else %}Date &amp; time{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Type{% else %}Type{% endif %}</th>
                 <th>{% if request.LANGUAGE_CODE == 'da' %}Underviser{% else %}Instructor{% endif %}</th>
                 <th>{% if request.LANGUAGE_CODE == 'da' %}Bookinger{% else %}Bookings{% endif %}</th>
                 <th>Status</th>
@@ -28,9 +51,28 @@
         </thead>
         <tbody>
             {% for c in upcoming %}
-            <tr>
-                <td><a class="table-link" href="{% url 'instructor:class_detail' c.pk %}">{{ c.title }}</a></td>
+            <tr
+                class="{% if c.is_weekly_recurring and not c.recurrence_parent_id %}weekly-master-row{% elif c.recurrence_parent_id %}weekly-occurrence-row{% endif %}"
+                data-class-kind="{% if c.is_weekly_recurring and not c.recurrence_parent_id %}weekly-master{% elif c.recurrence_parent_id %}weekly-occurrence{% else %}single{% endif %}"
+            >
+                <td>
+                    <a class="table-link" href="{% url 'instructor:class_detail' c.pk %}">{{ c.title }}</a>
+                    {% if c.is_weekly_recurring and not c.recurrence_parent_id %}
+                        <div class="class-list-note">{% if request.LANGUAGE_CODE == 'da' %}Rediger denne for at opdatere hele den ugentlige serie{% else %}Edit this to update the full weekly series{% endif %}</div>
+                    {% elif c.recurrence_parent_id %}
+                        <div class="class-list-note">{% if request.LANGUAGE_CODE == 'da' %}Genereret fra ugentlig serie{% else %}Generated from weekly series{% endif %}</div>
+                    {% endif %}
+                </td>
                 <td>{{ c.start_time|date:'D d M, H:i' }}</td>
+                <td>
+                    {% if c.is_weekly_recurring and not c.recurrence_parent_id %}
+                        <span class="pill pill-blue">{% if request.LANGUAGE_CODE == 'da' %}Ugentlig master{% else %}Weekly master{% endif %}</span>
+                    {% elif c.recurrence_parent_id %}
+                        <span class="pill pill-amber">{% if request.LANGUAGE_CODE == 'da' %}Genereret forekomst{% else %}Generated occurrence{% endif %}</span>
+                    {% else %}
+                        <span class="pill pill-grey">{% if request.LANGUAGE_CODE == 'da' %}Enkelt hold{% else %}Single class{% endif %}</span>
+                    {% endif %}
+                </td>
                 <td>{{ c.instructor_name }}</td>
                 <td>{{ c.booked_count }} / {{ c.capacity }}</td>
                 <td>
@@ -39,7 +81,11 @@
                     </span>
                 </td>
                 <td>
-                    <a class="table-link" href="{% url 'instructor:class_detail' c.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Administrer →{% else %}Manage →{% endif %}</a>
+                    {% if c.recurrence_parent_id %}
+                        <a class="table-link" href="{% url 'instructor:class_detail' c.recurrence_parent.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Rediger serie →{% else %}Edit series →{% endif %}</a>
+                    {% else %}
+                        <a class="table-link" href="{% url 'instructor:class_detail' c.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Administrer →{% else %}Manage →{% endif %}</a>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}
@@ -56,6 +102,7 @@
             <tr>
                 <th>{% if request.LANGUAGE_CODE == 'da' %}Hold{% else %}Class{% endif %}</th>
                 <th>{% if request.LANGUAGE_CODE == 'da' %}Dato &amp; tid{% else %}Date &amp; time{% endif %}</th>
+                <th>{% if request.LANGUAGE_CODE == 'da' %}Type{% else %}Type{% endif %}</th>
                 <th>{% if request.LANGUAGE_CODE == 'da' %}Underviser{% else %}Instructor{% endif %}</th>
                 <th>{% if request.LANGUAGE_CODE == 'da' %}Bookinger{% else %}Bookings{% endif %}</th>
                 <th></th>
@@ -63,12 +110,37 @@
         </thead>
         <tbody>
             {% for c in past %}
-            <tr>
-                <td><a class="table-link" href="{% url 'instructor:class_detail' c.pk %}">{{ c.title }}</a></td>
+            <tr
+                class="{% if c.is_weekly_recurring and not c.recurrence_parent_id %}weekly-master-row{% elif c.recurrence_parent_id %}weekly-occurrence-row{% endif %}"
+                data-class-kind="{% if c.is_weekly_recurring and not c.recurrence_parent_id %}weekly-master{% elif c.recurrence_parent_id %}weekly-occurrence{% else %}single{% endif %}"
+            >
+                <td>
+                    <a class="table-link" href="{% url 'instructor:class_detail' c.pk %}">{{ c.title }}</a>
+                    {% if c.is_weekly_recurring and not c.recurrence_parent_id %}
+                        <div class="class-list-note">{% if request.LANGUAGE_CODE == 'da' %}Master for ugentlig serie{% else %}Master for weekly series{% endif %}</div>
+                    {% elif c.recurrence_parent_id %}
+                        <div class="class-list-note">{% if request.LANGUAGE_CODE == 'da' %}Genereret fra ugentlig serie{% else %}Generated from weekly series{% endif %}</div>
+                    {% endif %}
+                </td>
                 <td>{{ c.start_time|date:'D d M, H:i' }}</td>
+                <td>
+                    {% if c.is_weekly_recurring and not c.recurrence_parent_id %}
+                        <span class="pill pill-blue">{% if request.LANGUAGE_CODE == 'da' %}Ugentlig master{% else %}Weekly master{% endif %}</span>
+                    {% elif c.recurrence_parent_id %}
+                        <span class="pill pill-amber">{% if request.LANGUAGE_CODE == 'da' %}Genereret forekomst{% else %}Generated occurrence{% endif %}</span>
+                    {% else %}
+                        <span class="pill pill-grey">{% if request.LANGUAGE_CODE == 'da' %}Enkelt hold{% else %}Single class{% endif %}</span>
+                    {% endif %}
+                </td>
                 <td>{{ c.instructor_name }}</td>
                 <td>{{ c.booked_count }} / {{ c.capacity }}</td>
-                <td><a class="table-link" href="{% url 'instructor:class_detail' c.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Vis →{% else %}View →{% endif %}</a></td>
+                <td>
+                    {% if c.recurrence_parent_id %}
+                        <a class="table-link" href="{% url 'instructor:class_detail' c.recurrence_parent.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Rediger serie →{% else %}Edit series →{% endif %}</a>
+                    {% else %}
+                        <a class="table-link" href="{% url 'instructor:class_detail' c.pk %}">{% if request.LANGUAGE_CODE == 'da' %}Vis →{% else %}View →{% endif %}</a>
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>
@@ -83,4 +155,27 @@
     <a class="button-primary" href="{% url 'instructor:class_create' %}">{% if request.LANGUAGE_CODE == 'da' %}+ Nyt hold{% else %}+ New class{% endif %}</a>
 </div>
 {% endif %}
+
+<script>
+    (function () {
+        const toggle = document.getElementById('masters-only-toggle');
+        if (!toggle) {
+            return;
+        }
+
+        const rows = document.querySelectorAll('tr[data-class-kind]');
+
+        function applyMasterFilter() {
+            const mastersOnly = toggle.checked;
+            rows.forEach((row) => {
+                const rowKind = row.getAttribute('data-class-kind');
+                const shouldShow = !mastersOnly || rowKind === 'weekly-master';
+                row.style.display = shouldShow ? '' : 'none';
+            });
+        }
+
+        applyMasterFilter();
+        toggle.addEventListener('change', applyMasterFilter);
+    })();
+</script>
 {% endblock %}

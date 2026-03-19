@@ -1,0 +1,59 @@
+{% extends 'base_public.html' %}
+
+{% block title %}{% if request.LANGUAGE_CODE == 'da' %}Yoga Platform{% else %}Yoga Platform{% endif %}{% endblock %}
+
+{% block content %}
+<section class="hero-card">
+    <div class="hero-copy">
+        <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Yoga Platform{% else %}Yoga Platform{% endif %}</p>
+        <h1>{% if request.LANGUAGE_CODE == 'da' %}Find dit studio og book næste hold.{% else %}Find your studio and book your next class.{% endif %}</h1>
+        <p class="hero-text">
+            {% if request.LANGUAGE_CODE == 'da' %}
+            Vælg et studio for at se ledige hold, tider og booke din plads.
+            {% else %}
+            Choose a studio to see available classes, schedules, and reserve your spot.
+            {% endif %}
+        </p>
+        <div class="hero-actions">
+            <a class="button-primary" href="{% url 'booking:class_list' default_studio.slug %}">
+                {% if request.LANGUAGE_CODE == 'da' %}Se standard studio{% else %}Open default studio{% endif %}
+            </a>
+        </div>
+    </div>
+</section>
+
+<section class="section-heading" id="studio-directory">
+    <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Studios{% else %}Studios{% endif %}</p>
+    <h2>{% if request.LANGUAGE_CODE == 'da' %}Vælg et studio{% else %}Choose a studio{% endif %}</h2>
+</section>
+
+<section class="class-grid">
+    {% for studio in studios %}
+        <article class="class-card">
+            <div class="landing-studio-header">
+                {% if studio.logo %}
+                <img class="landing-studio-badge-image" src="{{ studio.logo.url }}" alt="{{ studio.name }} logo">
+                {% else %}
+                <div class="landing-studio-badge-fallback">{{ studio.name|slice:':1'|upper }}</div>
+                {% endif %}
+                <h3>{{ studio.name }}</h3>
+            </div>
+            <p class="hero-text">
+                {% if request.LANGUAGE_CODE == 'da' %}
+                Se studioets holdoversigt og book direkte online.
+                {% else %}
+                View this studio's class schedule and book online.
+                {% endif %}
+            </p>
+            <a class="button-secondary" href="{% url 'booking:class_list' studio.slug %}">
+                {% if request.LANGUAGE_CODE == 'da' %}Gå til hold{% else %}Go to classes{% endif %}
+            </a>
+        </article>
+    {% empty %}
+        <article class="empty-state">
+            <h3>{% if request.LANGUAGE_CODE == 'da' %}Ingen aktive studios endnu{% else %}No active studios yet{% endif %}</h3>
+            <p>{% if request.LANGUAGE_CODE == 'da' %}Kontakt administrator for at aktivere et studio.{% else %}Contact the administrator to activate a studio.{% endif %}</p>
+        </article>
+    {% endfor %}
+</section>
+{% endblock %}
