@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Booking, Client, Feature, SmsReminderLog, Studio, StudioFeatureAccess, StudioMembership, YogaClass
+from .models import Booking, Client, Feature, SmsReminderLog, Studio, StudioFeatureAccess, StudioMembership, UserAuthenticatorDevice, YogaClass
 
 
 class BookingInline(admin.TabularInline):
@@ -97,3 +97,12 @@ class SmsReminderLogAdmin(admin.ModelAdmin):
 	search_fields = ('client_name', 'client_email', 'normalized_phone', 'class_title', 'gateway_reference', 'gateway_error')
 	list_select_related = ('yoga_class',)
 	readonly_fields = ('created_at',)
+
+
+@admin.register(UserAuthenticatorDevice)
+class UserAuthenticatorDeviceAdmin(admin.ModelAdmin):
+	list_display = ('user', 'is_confirmed', 'confirmed_at', 'last_verified_step', 'updated_at')
+	list_filter = ('is_confirmed', 'confirmed_at', 'updated_at')
+	search_fields = ('user__username', 'user__email', 'user__first_name', 'user__last_name')
+	raw_id_fields = ('user',)
+	readonly_fields = ('created_at', 'updated_at', 'confirmed_at', 'last_verified_step')

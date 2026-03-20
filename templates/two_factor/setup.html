@@ -1,0 +1,76 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="{{ request.LANGUAGE_CODE|default:'da' }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% if request.LANGUAGE_CODE == 'da' %}Opsæt authenticator{% else %}Set up authenticator{% endif %} | Yoga Studio Admin</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'booking/app.css' %}">
+</head>
+<body>
+    <div class="portal-auth-shell">
+        <section class="portal-auth-card two-factor-card">
+            <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}To-faktor login{% else %}Two-factor login{% endif %}</p>
+            <h1>
+                {% if can_manage_existing_device %}
+                    {% if request.LANGUAGE_CODE == 'da' %}Skift authenticator{% else %}Rotate authenticator{% endif %}
+                {% else %}
+                    {% if request.LANGUAGE_CODE == 'da' %}Opsæt din authenticator{% else %}Set up your authenticator{% endif %}
+                {% endif %}
+            </h1>
+            <p class="hero-text">
+                {% if request.LANGUAGE_CODE == 'da' %}
+                Scan QR-koden i din authenticator-app og indtast den aktuelle 6-cifrede kode. Admin og studioportalen kræver derefter både password og kode.
+                {% else %}
+                Scan the QR code in your authenticator app and enter the current 6-digit code. Admin and the studio portal will then require both your password and the app code.
+                {% endif %}
+            </p>
+
+            {% if messages %}
+                <section class="messages">
+                    {% for message in messages %}
+                        <div class="message {{ message.tags }}">{{ message }}</div>
+                    {% endfor %}
+                </section>
+            {% endif %}
+
+            <div class="two-factor-grid">
+                <div class="two-factor-qr-panel">
+                    <img class="two-factor-qr" src="{{ qr_code_data_uri }}" alt="Authenticator QR code">
+                </div>
+                <div class="two-factor-manual-panel">
+                    <p class="detail-label">{% if request.LANGUAGE_CODE == 'da' %}Manuel nøgle{% else %}Manual key{% endif %}</p>
+                    <p class="two-factor-secret">{{ manual_secret }}</p>
+                    <p class="client-email">{% if request.LANGUAGE_CODE == 'da' %}Hvis scanning ikke virker, kan du oprette kontoen manuelt med nøglen ovenfor.{% else %}If scanning fails, you can add the account manually with the key above.{% endif %}</p>
+                </div>
+            </div>
+
+            <form method="post" class="stack-form">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ next }}">
+                {% for field in form %}
+                <div class="form-field">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.help_text %}<div class="form-help">{{ field.help_text }}</div>{% endif %}
+                    {% if field.errors %}<div class="form-error">{{ field.errors|join:', ' }}</div>{% endif %}
+                </div>
+                {% endfor %}
+                {% if form.non_field_errors %}<div class="form-error">{{ form.non_field_errors|join:', ' }}</div>{% endif %}
+                <button class="button-primary button-full" type="submit">{% if request.LANGUAGE_CODE == 'da' %}Aktivér authenticator{% else %}Enable authenticator{% endif %}</button>
+            </form>
+
+            {% if can_manage_existing_device %}
+            <form method="post" class="stack-form two-factor-secondary-form">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ next }}">
+                <button class="button-secondary button-full" type="submit" name="regenerate" value="1">{% if request.LANGUAGE_CODE == 'da' %}Generér ny hemmelig nøgle{% else %}Generate a new secret{% endif %}</button>
+            </form>
+            {% endif %}
+        </section>
+    </div>
+</body>
+</html>

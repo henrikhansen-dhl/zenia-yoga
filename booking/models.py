@@ -1,9 +1,16 @@
 from django.conf import settings
 from datetime import timedelta
+import base64
+import hashlib
+import hmac
+import time
 
+from cryptography.fernet import Fernet
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
+
+import pyotp
 
 
 class Studio(models.Model):
@@ -130,6 +137,95 @@ class StudioMembership(models.Model):
 	@property
 	def can_manage_team(self):
 		return self.role in {self.ROLE_OWNER, self.ROLE_MANAGER}
+
+
+class UserAuthenticatorDevice(models.Model):
+	user = models.OneToOneField(
+		settings.AUTH_USER_MODEL,
+		on_delete=models.CASCADE,
+		related_name='authenticator_device',
+	)
+	secret_encrypted = models.TextField(blank=True)
+	is_confirmed = models.BooleanField(default=False)
+	confirmed_at = models.DateTimeField(null=True, blank=True)
+	last_verified_step = models.BigIntegerField(null=True, blank=True)
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		ordering = ['user__username']
+		verbose_name = 'authenticator device'
+		verbose_name_plural = 'authenticator devices'
+
+	def __str__(self):
+		state = 'confirmed' if self.is_confirmed else 'pending'
+		return f'{self.user} authenticator ({state})'
+
+	@staticmethod
+	def _cipher():
+		key_material = hashlib.sha256(settings.SECRET_KEY.encode('utf-8')).digest()
+		return Fernet(base64.urlsafe_b64encode(key_material))
+
+	@property
+	def has_secret(self):
+		return bool(self.secret_encrypted)
+
+	@property
+	def secret(self):
+		if not self.secret_encrypted:
+			return ''
+		return self._cipher().decrypt(self.secret_encrypted.encode('utf-8')).decode('utf-8')
+
+	def set_secret(self, secret, *, confirmed=False):
+		self.secret_encrypted = self._cipher().encrypt(secret.encode('utf-8')).decode('utf-8')
+		self.is_confirmed = confirmed
+		self.confirmed_at = timezone.now() if confirmed else None
+		self.last_verified_step = None
+
+	def regenerate_secret(self):
+		self.set_secret(pyotp.random_base32(), confirmed=False)
+
+	def ensure_secret(self):
+		if not self.has_secret:
+			self.regenerate_secret()
+		return self.secret
+
+	def provisioning_uri(self):
+		secret = self.ensure_secret()
+		account_name = self.user.email or self.user.get_username()
+		return pyotp.TOTP(secret).provisioning_uri(
+			name=account_name,
+			issuer_name='Yoga Studio Admin',
+		)
+
+	def _matching_step(self, token, valid_window=1):
+		normalized_token = ''.join(character for character in str(token or '') if character.isdigit())
+		if len(normalized_token) != 6 or not self.has_secret:
+			return None
+
+		totp = pyotp.TOTP(self.secret)
+		current_step = int(time.time() // totp.interval)
+		for offset in range(-valid_window, valid_window + 1):
+			candidate_step = current_step + offset
+			candidate_code = totp.at(candidate_step * totp.interval)
+			if hmac.compare_digest(candidate_code, normalized_token):
+				return candidate_step
+		return None
+
+	def verify_token(self, token, *, valid_window=1, confirm=True):
+		matching_step = self._matching_step(token, valid_window=valid_window)
+		if matching_step is None:
+			return False
+
+		if self.last_verified_step is not None and matching_step <= self.last_verified_step:
+			return False
+
+		self.last_verified_step = matching_step
+		if confirm and not self.is_confirmed:
+			self.is_confirmed = True
+			self.confirmed_at = timezone.now()
+		self.save(update_fields=['last_verified_step', 'is_confirmed', 'confirmed_at', 'updated_at'])
+		return True
 
 
 class StudioInvoice(models.Model):

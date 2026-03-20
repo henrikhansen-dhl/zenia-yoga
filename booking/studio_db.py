@@ -1,3 +1,4 @@
+
 """
 Studio database management utilities.
 
@@ -9,6 +10,7 @@ Usage in views/decorators:
     activate_studio(studio)   # sets thread-local DB alias
     deactivate_studio()       # clears it after request
 """
+import sqlite3
 import threading
 import sys
 
@@ -16,6 +18,7 @@ from django.conf import settings
 from django.core.management import call_command
 
 _local = threading.local()
+_verified_studio_aliases = set()
 
 STUDIO_DB_PREFIX = 'studio_'
 _RUNNING_TESTS = 'test' in sys.argv
@@ -74,6 +77,32 @@ def register_studio_db(slug: str) -> str:
     return alias
 
 
+def _studio_db_has_booking_schema(slug: str) -> bool:
+    """Return True when the studio SQLite file already contains booking tables."""
+    db_path = settings.BASE_DIR / f'db_studio_{slug}.sqlite3'
+    if not db_path.exists() or db_path.stat().st_size == 0:
+        return False
+
+    with sqlite3.connect(db_path) as connection:
+        row = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='booking_yogaclass'"
+        ).fetchone()
+    return row is not None
+
+
+def ensure_studio_database(slug: str, verbosity: int = 0) -> str:
+    """Register the studio DB and lazily create booking schema when needed."""
+    alias = register_studio_db(slug)
+    if _RUNNING_TESTS or alias in _verified_studio_aliases:
+        return alias
+
+    if not _studio_db_has_booking_schema(slug):
+        call_command('migrate', 'booking', database=alias, verbosity=verbosity, interactive=False)
+
+    _verified_studio_aliases.add(alias)
+    return alias
+
+
 def register_all_studio_dbs() -> None:
     """Register DB connections for every Studio row in the platform database."""
     from .models import Studio  # late import to avoid circular reference at module load
@@ -95,7 +124,7 @@ def activate_studio(studio_or_slug) -> str:
         return 'default'
 
     slug = studio_or_slug if isinstance(studio_or_slug, str) else studio_or_slug.slug
-    alias = register_studio_db(slug)
+    alias = ensure_studio_database(slug)
     set_current_studio_alias(alias)
     return alias
 
@@ -106,8 +135,7 @@ def provision_studio_database(slug: str, verbosity: int = 0) -> str:
 
     Returns the registered DB alias.
     """
-    alias = register_studio_db(slug)
-    call_command('migrate', 'booking', database=alias, verbosity=verbosity, interactive=False)
+    alias = ensure_studio_database(slug, verbosity=verbosity)
     return alias
 
 

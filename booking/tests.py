@@ -2,6 +2,7 @@ import tempfile
 from datetime import timedelta
 from unittest.mock import patch
 
+import pyotp
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
@@ -14,8 +15,16 @@ from django.utils import timezone
 from .db_router import StudioDatabaseRouter
 from .middleware import StudioContextMiddleware
 from .forms import BookingForm, YogaClassForm
-from .models import Booking, Client, Feature, SmsReminderLog, Studio, StudioFeatureAccess, StudioInvoice, StudioMembership, YogaClass
+from .models import Booking, Client, Feature, SmsReminderLog, Studio, StudioFeatureAccess, StudioInvoice, StudioMembership, UserAuthenticatorDevice, YogaClass
 from .studio_db import deactivate_studio, set_current_studio_alias
+
+
+def force_login_with_verified_two_factor(client, user):
+	client.force_login(user)
+	session = client.session
+	session['two_factor_verified_user_id'] = user.pk
+	session['two_factor_verified_auth_hash'] = user.get_session_auth_hash()
+	session.save()
 
 
 class BookingFlowTests(TestCase):
@@ -43,6 +52,7 @@ class BookingFlowTests(TestCase):
 			yoga_class=self.yoga_class,
 			client_name='Mira',
 			client_email='mira@example.com',
+			client_phone='12345678',
 		)
 
 		form = BookingForm(
@@ -62,12 +72,14 @@ class BookingFlowTests(TestCase):
 			yoga_class=self.yoga_class,
 			client_name='Mira',
 			client_email='mira@example.com',
+			client_phone='12345678',
 		)
 
 		booking = Booking(
 			yoga_class=self.yoga_class,
 			client_name='Nova',
 			client_email='nova@example.com',
+			client_phone='87654321',
 		)
 
 		with self.assertRaises(ValidationError):
@@ -139,6 +151,9 @@ class BookingFlowTests(TestCase):
 
 
 class WeeklyRecurrenceTests(TestCase):
+	def setUp(self):
+		self.default_studio = Studio.get_default()
+
 	def test_recurring_class_generates_next_two_upcoming_occurrences(self):
 		now = timezone.now()
 		root_class = YogaClass.objects.create(
@@ -190,6 +205,11 @@ class WeeklyRecurrenceTests(TestCase):
 			email='series@example.com',
 			password='test-pass-123',
 		)
+		StudioMembership.objects.create(
+			studio=self.default_studio,
+			user=user,
+			role=StudioMembership.ROLE_MANAGER,
+		)
 		self.client.force_login(user)
 
 		now = timezone.now()
@@ -225,6 +245,11 @@ class WeeklyRecurrenceTests(TestCase):
 			email='series-quick@example.com',
 			password='test-pass-123',
 		)
+		StudioMembership.objects.create(
+			studio=self.default_studio,
+			user=user,
+			role=StudioMembership.ROLE_MANAGER,
+		)
 		self.client.force_login(user)
 
 		now = timezone.now()
@@ -259,6 +284,11 @@ class WeeklyRecurrenceTests(TestCase):
 			username='series-quick-existing',
 			email='series-existing@example.com',
 			password='test-pass-123',
+		)
+		StudioMembership.objects.create(
+			studio=self.default_studio,
+			user=user,
+			role=StudioMembership.ROLE_MANAGER,
 		)
 		self.client.force_login(user)
 
@@ -431,6 +461,11 @@ class InstructorClassFormTests(TestCase):
 			email='series-remove@example.com',
 			password='test-pass-123',
 		)
+		StudioMembership.objects.create(
+			studio=Studio.get_default(),
+			user=user,
+			role=StudioMembership.ROLE_MANAGER,
+		)
 		self.client.force_login(user)
 
 		now = timezone.now()
@@ -467,6 +502,11 @@ class InstructorShellTests(TestCase):
 			email='shell-user@example.com',
 			password='test-pass-123',
 		)
+		StudioMembership.objects.create(
+			studio=Studio.get_default(),
+			user=user,
+			role=StudioMembership.ROLE_MANAGER,
+		)
 		self.client.force_login(user)
 
 		response = self.client.get('/instructor/')
@@ -483,6 +523,12 @@ class ClientManagementViewTests(TestCase):
 			username='instructor',
 			email='instructor@example.com',
 			password='test-pass-123',
+		)
+		self.default_studio = Studio.get_default()
+		StudioMembership.objects.create(
+			studio=self.default_studio,
+			user=self.user,
+			role=StudioMembership.ROLE_MANAGER,
 		)
 		now = timezone.now()
 		self.class_one = YogaClass.objects.create(
@@ -692,7 +738,7 @@ class ClientManagementViewTests(TestCase):
 		SMS_GATEWAY_FROM='YogaStudioPlatform',
 		SMS_GATEWAY_LANGUAGE='da',
 	)
-	@patch('booking.instructor_views.urllib_request.urlopen')
+	@patch('booking.sms_service.urllib_request.urlopen')
 	def test_send_sms_reminders_uses_gateway_for_manual_clients(self, mock_urlopen):
 		self.client.force_login(self.user)
 		client = Client.objects.create(
@@ -726,7 +772,7 @@ class ClientManagementViewTests(TestCase):
 		SMS_GATEWAY_FROM='YogaStudioPlatform',
 		SMS_GATEWAY_LANGUAGE='da',
 	)
-	@patch('booking.instructor_views.urllib_request.urlopen')
+	@patch('booking.sms_service.urllib_request.urlopen')
 	def test_send_sms_reminders_logs_invalid_phone_as_failed(self, mock_urlopen):
 		self.client.force_login(self.user)
 		client = Client.objects.create(
@@ -773,7 +819,7 @@ class StudioPlatformTests(TestCase):
 		self.assertEqual(response.headers['Location'], '/studio/studios/')
 
 	def test_superuser_can_create_studio_and_enable_feature(self):
-		self.client.force_login(self.superuser)
+		force_login_with_verified_two_factor(self.client, self.superuser)
 
 		response = self.client.post('/studio/studios/new/', data={
 			'name': 'North Studio',
@@ -800,7 +846,7 @@ class StudioPlatformTests(TestCase):
 		)
 
 	def test_studio_create_shows_db_provision_success_message(self):
-		self.client.force_login(self.superuser)
+		force_login_with_verified_two_factor(self.client, self.superuser)
 
 		response = self.client.post('/studio/studios/new/', data={
 			'name': 'West Studio',
@@ -817,7 +863,7 @@ class StudioPlatformTests(TestCase):
 		)
 
 	def test_studio_edit_page_shows_public_booking_url(self):
-		self.client.force_login(self.superuser)
+		force_login_with_verified_two_factor(self.client, self.superuser)
 		studio = Studio.objects.create(name='North Studio', slug='north-studio')
 
 		response = self.client.get(f'/studio/studios/{studio.pk}/edit/')
@@ -827,7 +873,7 @@ class StudioPlatformTests(TestCase):
 		self.assertContains(response, 'data-copy-url="http://testserver/studios/north-studio/"', html=False)
 
 	def test_studio_list_shows_public_booking_url_and_copy_action(self):
-		self.client.force_login(self.superuser)
+		force_login_with_verified_two_factor(self.client, self.superuser)
 		studio = Studio.objects.create(name='North Studio', slug='north-studio')
 
 		response = self.client.get('/studio/studios/')
@@ -837,7 +883,7 @@ class StudioPlatformTests(TestCase):
 		self.assertContains(response, 'data-copy-url="http://testserver/studios/north-studio/"', html=False)
 
 	def test_superuser_can_create_studio_membership(self):
-		self.client.force_login(self.superuser)
+		force_login_with_verified_two_factor(self.client, self.superuser)
 		studio = Studio.get_default()
 		staff_user = get_user_model().objects.create_user(
 			username='studio-staff',
@@ -863,8 +909,8 @@ class StudioPlatformTests(TestCase):
 
 	def test_clients_can_share_email_across_studios(self):
 		other_studio = Studio.objects.create(name='South Studio', slug='south-studio')
-		Client.objects.create(name='Lina One', email='lina@example.com')
-		Client.objects.create(name='Lina Two', email='lina@example.com', studio=other_studio)
+		Client.objects.create(name='Lina One', email='lina@example.com', phone='11111111')
+		Client.objects.create(name='Lina Two', email='lina@example.com', phone='22222222', studio=other_studio)
 
 		self.assertEqual(Client.objects.filter(email='lina@example.com').count(), 2)
 
@@ -1061,7 +1107,7 @@ class StudioPortalTests(TestCase):
 		self.assertContains(response, 'Studio')
 
 	def test_non_superuser_owner_is_redirected_from_employee_pages(self):
-		self.client.force_login(self.owner)
+		force_login_with_verified_two_factor(self.client, self.owner)
 		response = self.client.post('/studio/employees/new/', data={
 			'username': 'new-employee',
 			'email': 'employee@example.com',
@@ -1077,7 +1123,7 @@ class StudioPortalTests(TestCase):
 		self.assertFalse(get_user_model().objects.filter(username='new-employee').exists())
 
 	def test_non_superuser_owner_is_redirected_from_invoice_pages(self):
-		self.client.force_login(self.owner)
+		force_login_with_verified_two_factor(self.client, self.owner)
 		feature = Feature.objects.create(code='sms-reminders', name='SMS Reminders')
 		StudioFeatureAccess.objects.create(studio=self.studio, feature=feature, is_enabled=True)
 		SmsReminderLog.objects.create(
@@ -1110,8 +1156,72 @@ class StudioPortalTests(TestCase):
 			email='portal-admin@example.com',
 			password='test-pass-123',
 		)
-		self.client.force_login(superuser)
+		force_login_with_verified_two_factor(self.client, superuser)
 
 		response = self.client.get('/studio/')
 
 		self.assertEqual(response.status_code, 200)
+
+
+class TwoFactorAuthTests(TestCase):
+	def setUp(self):
+		self.superuser = get_user_model().objects.create_superuser(
+			username='two-factor-admin',
+			email='two-factor@example.com',
+			password='test-pass-123',
+		)
+
+	def test_first_studio_access_redirects_to_authenticator_setup(self):
+		self.client.force_login(self.superuser)
+
+		response = self.client.get('/studio/')
+
+		self.assertEqual(response.status_code, 302)
+		self.assertIn('/two-factor/setup/', response.headers['Location'])
+		self.assertIn('next=%2Fstudio%2F', response.headers['Location'])
+
+	def test_authenticator_setup_enables_studio_access(self):
+		self.client.force_login(self.superuser)
+
+		setup_response = self.client.get('/two-factor/setup/?next=/studio/')
+		self.assertEqual(setup_response.status_code, 200)
+
+		device = UserAuthenticatorDevice.objects.get(user=self.superuser)
+		token = pyotp.TOTP(device.secret).now()
+
+		confirm_response = self.client.post('/two-factor/setup/?next=/studio/', data={
+			'token': token,
+			'next': '/studio/',
+		})
+
+		self.assertEqual(confirm_response.status_code, 302)
+		self.assertEqual(confirm_response.headers['Location'], '/studio/')
+		device.refresh_from_db()
+		self.assertTrue(device.is_confirmed)
+
+		dashboard_response = self.client.get('/studio/')
+		self.assertEqual(dashboard_response.status_code, 200)
+
+	def test_admin_requires_authenticator_verification_after_password_login(self):
+		device = UserAuthenticatorDevice(user=self.superuser)
+		device.set_secret(pyotp.random_base32(), confirmed=True)
+		device.save()
+
+		self.client.force_login(self.superuser)
+
+		response = self.client.get('/admin/')
+
+		self.assertEqual(response.status_code, 302)
+		self.assertIn('/two-factor/verify/', response.headers['Location'])
+		self.assertIn('next=%2Fadmin%2F', response.headers['Location'])
+
+		verify_response = self.client.post('/two-factor/verify/?next=/admin/', data={
+			'token': pyotp.TOTP(device.secret).now(),
+			'next': '/admin/',
+		})
+
+		self.assertEqual(verify_response.status_code, 302)
+		self.assertEqual(verify_response.headers['Location'], '/admin/')
+
+		admin_response = self.client.get('/admin/')
+		self.assertEqual(admin_response.status_code, 200)

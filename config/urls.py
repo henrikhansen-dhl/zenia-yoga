@@ -26,6 +26,7 @@ admin.site.site_title = 'Yoga Studio Admin'
 admin.site.index_title = 'Studio administration'
 
 urlpatterns = [
+    path('two-factor/', include('booking.two_factor_urls')),
     path('admin/', admin.site.urls),
     path('i18n/', include('django.conf.urls.i18n')),
     re_path(r'^studios/?$', studio_admin_views.legacy_studios_root_redirect),

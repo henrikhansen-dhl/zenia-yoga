@@ -54,6 +54,7 @@
                 <p class="instr-nav-section-label">{% if request.LANGUAGE_CODE == 'da' %}Aktivt studie{% else %}Active studio{% endif %}</p>
                 {% endif %}
                 <a class="instr-nav-link {% block nav_dashboard %}{% endblock %}" href="{% url 'studio_portal:dashboard' %}">{% if request.LANGUAGE_CODE == 'da' %}Overblik{% else %}Dashboard{% endif %}</a>
+                <a class="instr-nav-link" href="{% url 'two_factor:setup' %}?next={{ request.get_full_path|urlencode }}">{% if request.LANGUAGE_CODE == 'da' %}Sikkerhed{% else %}Security{% endif %}</a>
                 {% if request.studio_role == 'owner' or request.studio_role == 'manager' %}
                 <a class="instr-nav-link {% block nav_employees %}{% endblock %}" href="{% url 'studio_portal:employee_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Medarbejdere{% else %}Employees{% endif %}</a>
                 <a class="instr-nav-link {% block nav_invoices %}{% endblock %}" href="{% url 'studio_portal:invoice_list' %}">{% if request.LANGUAGE_CODE == 'da' %}Fakturaer{% else %}Invoices{% endif %}</a>

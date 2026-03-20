@@ -1,5 +1,7 @@
 from django.conf import settings
 
+from .two_factor import build_two_factor_redirect, get_user_authenticator_device, is_two_factor_protected_path, is_two_factor_verified
+
 
 class DefaultLanguageMiddleware:
     def __init__(self, get_response):
@@ -35,3 +37,21 @@ class StudioContextMiddleware:
             return self.get_response(request)
         finally:
             deactivate_studio()
+
+
+class TwoFactorMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if (
+            request.user.is_authenticated
+            and is_two_factor_protected_path(request.path)
+            and not is_two_factor_verified(request)
+        ):
+            device = get_user_authenticator_device(request.user)
+            if device and device.is_confirmed:
+                return build_two_factor_redirect(request, 'verify')
+            return build_two_factor_redirect(request, 'setup')
+
+        return self.get_response(request)

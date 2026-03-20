@@ -22,6 +22,7 @@ _PLATFORM_MODELS = frozenset([
     'studiomembership',
     'studioinvoice',
     'studioinvoiceline',
+    'userauthenticatordevice',
 ])
 _RUNNING_TESTS = 'test' in sys.argv
 

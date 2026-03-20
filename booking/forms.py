@@ -482,6 +482,42 @@ class WeeklyParticipantQuickAddForm(forms.Form):
         return phone
 
 
+class AuthenticatorTokenForm(forms.Form):
+    token = forms.CharField(max_length=6, min_length=6)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        language = get_language() or 'en'
+        is_danish = language.startswith('da')
+
+        self.fields['token'].label = 'Engangskode' if is_danish else 'One-time code'
+        self.fields['token'].widget = forms.TextInput(attrs={
+            'inputmode': 'numeric',
+            'autocomplete': 'one-time-code',
+            'placeholder': '123456',
+            'max_length': 6,
+        })
+        self.fields['token'].help_text = (
+            'Indtast den 6-cifrede kode fra din authenticator-app.'
+            if is_danish else
+            'Enter the 6-digit code from your authenticator app.'
+        )
+
+    def clean_token(self):
+        token = ''.join(character for character in (self.cleaned_data.get('token') or '') if character.isdigit())
+        if len(token) != 6:
+            raise forms.ValidationError(
+                'Koden skal være 6 cifre.'
+                if (get_language() or 'en').startswith('da')
+                else 'The code must be 6 digits.'
+            )
+        return token
+
+
+class AuthenticatorSetupForm(AuthenticatorTokenForm):
+    pass
+
+
 class StudioForm(forms.ModelForm):
     enabled_features = forms.ModelMultipleChoiceField(
         queryset=Feature.objects.none(),

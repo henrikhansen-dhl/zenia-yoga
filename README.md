@@ -30,6 +30,12 @@ python manage.py createsuperuser
 python manage.py runserver
 ```
 
+If a studio page fails because its per-studio SQLite database has not been provisioned yet, repair and backfill it with:
+
+```powershell
+python manage.py migrate_to_studio_dbs --studio zenia-yoga
+```
+
 ## PythonAnywhere notes
 
 - Set environment variables from .env.example in the PythonAnywhere dashboard.
