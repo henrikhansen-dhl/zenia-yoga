@@ -14,6 +14,12 @@ _ROLE_ORDER = {
 }
 
 
+def get_staff_login_path(request_path):
+    if request_path.startswith(('/studio/', '/instructor/')):
+        return '/studio/login/'
+    return '/admin/login/'
+
+
 def get_accessible_studios(user):
     if not user.is_authenticated:
         return Studio.objects.none()
@@ -74,7 +80,7 @@ def studio_login_required(view_func):
     @wraps(view_func)
     def wrapped(request, *args, **kwargs):
         if not request.user.is_authenticated:
-            login_path = '/studio/login/' if request.path.startswith('/studio/') else '/admin/login/'
+            login_path = get_staff_login_path(request.path)
             return redirect(login_path + '?next=' + request.get_full_path())
 
         request.studio = get_request_studio(request)

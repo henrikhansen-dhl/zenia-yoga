@@ -251,7 +251,7 @@ class WeeklyRecurrenceTests(TestCase):
 			user=user,
 			role=StudioMembership.ROLE_MANAGER,
 		)
-		self.client.force_login(user)
+		force_login_with_verified_two_factor(self.client, user)
 
 		now = timezone.now()
 		root_class = YogaClass.objects.create(
@@ -291,7 +291,7 @@ class WeeklyRecurrenceTests(TestCase):
 			user=user,
 			role=StudioMembership.ROLE_MANAGER,
 		)
-		self.client.force_login(user)
+		force_login_with_verified_two_factor(self.client, user)
 
 		now = timezone.now()
 		root_class = YogaClass.objects.create(
@@ -332,7 +332,7 @@ class WeeklyRecurrenceTests(TestCase):
 			user=user,
 			role=StudioMembership.ROLE_MANAGER,
 		)
-		self.client.force_login(user)
+		force_login_with_verified_two_factor(self.client, user)
 
 		now = timezone.now()
 		root_class = YogaClass.objects.create(
@@ -372,7 +372,7 @@ class WeeklyRecurrenceTests(TestCase):
 			email='booking-manager@example.com',
 			password='test-pass-123',
 		)
-		self.client.force_login(user)
+		force_login_with_verified_two_factor(self.client, user)
 
 		now = timezone.now()
 		yoga_class = YogaClass.objects.create(
@@ -417,7 +417,7 @@ class WeeklyRecurrenceTests(TestCase):
 			user=user,
 			role=StudioMembership.ROLE_MANAGER,
 		)
-		self.client.force_login(user)
+		force_login_with_verified_two_factor(self.client, user)
 
 		now = timezone.now()
 		root_class = YogaClass.objects.create(
@@ -460,7 +460,7 @@ class WeeklyRecurrenceTests(TestCase):
 			user=user,
 			role=StudioMembership.ROLE_MANAGER,
 		)
-		self.client.force_login(user)
+		force_login_with_verified_two_factor(self.client, user)
 
 		now = timezone.now()
 		root_class = YogaClass.objects.create(
@@ -501,7 +501,7 @@ class WeeklyRecurrenceTests(TestCase):
 			user=user,
 			role=StudioMembership.ROLE_MANAGER,
 		)
-		self.client.force_login(user)
+		force_login_with_verified_two_factor(self.client, user)
 
 		now = timezone.now()
 		root_class = YogaClass.objects.create(
@@ -582,7 +582,7 @@ class WeeklyRecurrenceTests(TestCase):
 			user=user,
 			role=StudioMembership.ROLE_MANAGER,
 		)
-		self.client.force_login(user)
+		force_login_with_verified_two_factor(self.client, user)
 
 		now = timezone.now()
 		root_class = YogaClass.objects.create(
@@ -633,7 +633,7 @@ class WeeklyRecurrenceTests(TestCase):
 			user=user,
 			role=StudioMembership.ROLE_MANAGER,
 		)
-		self.client.force_login(user)
+		force_login_with_verified_two_factor(self.client, user)
 
 		now = timezone.now()
 		root_class = YogaClass.objects.create(
@@ -674,7 +674,7 @@ class WeeklyRecurrenceTests(TestCase):
 			email='booking-manager-list@example.com',
 			password='test-pass-123',
 		)
-		self.client.force_login(user)
+		force_login_with_verified_two_factor(self.client, user)
 
 		now = timezone.now()
 		yoga_class = YogaClass.objects.create(
@@ -772,7 +772,7 @@ class InstructorClassFormTests(TestCase):
 			user=user,
 			role=StudioMembership.ROLE_MANAGER,
 		)
-		self.client.force_login(user)
+		force_login_with_verified_two_factor(self.client, user)
 
 		now = timezone.now()
 		root_class = YogaClass.objects.create(
@@ -813,7 +813,7 @@ class InstructorShellTests(TestCase):
 			user=user,
 			role=StudioMembership.ROLE_MANAGER,
 		)
-		self.client.force_login(user)
+		force_login_with_verified_two_factor(self.client, user)
 
 		response = self.client.get('/instructor/')
 
@@ -821,6 +821,36 @@ class InstructorShellTests(TestCase):
 		self.assertContains(response, 'action="/admin/logout/"', html=False)
 		self.assertContains(response, 'method="post"', html=False)
 		self.assertNotContains(response, '/admin/logout/?next=/')
+
+	def test_class_delete_confirmation_page_renders(self):
+		user = get_user_model().objects.create_user(
+			username='delete-user',
+			email='delete-user@example.com',
+			password='test-pass-123',
+		)
+		studio = Studio.get_default()
+		StudioMembership.objects.create(
+			studio=studio,
+			user=user,
+			role=StudioMembership.ROLE_MANAGER,
+		)
+		yoga_class = YogaClass.objects.create(
+			studio=studio,
+			title='Delete Me',
+			short_description='Delete test class.',
+			description='Class used for delete confirmation test.',
+			instructor_name='Elin',
+			start_time=timezone.now() + timedelta(days=1),
+			end_time=timezone.now() + timedelta(days=1, hours=1),
+			capacity=10,
+		)
+		force_login_with_verified_two_factor(self.client, user)
+
+		response = self.client.get(f'/instructor/classes/{yoga_class.pk}/delete/')
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, 'Delete Me')
+		self.assertContains(response, f'/instructor/classes/{yoga_class.pk}/')
 
 
 class ClientManagementViewTests(TestCase):
@@ -872,9 +902,10 @@ class ClientManagementViewTests(TestCase):
 	def test_client_list_requires_login(self):
 		response = self.client.get('/instructor/clients/')
 		self.assertEqual(response.status_code, 302)
+		self.assertEqual(response.headers['Location'], '/studio/login/?next=/instructor/clients/')
 
 	def test_client_list_groups_classes_by_client_email(self):
-		self.client.force_login(self.user)
+		force_login_with_verified_two_factor(self.client, self.user)
 		response = self.client.get('/instructor/clients/')
 
 		self.assertEqual(response.status_code, 200)
@@ -885,7 +916,7 @@ class ClientManagementViewTests(TestCase):
 		self.assertEqual(len(clients[0]['classes']), 2)
 
 	def test_client_list_allows_manual_client_creation_with_reminder_classes(self):
-		self.client.force_login(self.user)
+		force_login_with_verified_two_factor(self.client, self.user)
 		response = self.client.post('/instructor/clients/', data={
 			'name': 'Lina Mo',
 			'email': 'lina@example.com',
@@ -905,7 +936,7 @@ class ClientManagementViewTests(TestCase):
 		self.assertEqual(list_response.context['client_count'], 2)
 
 	def test_export_sms_reminders_returns_csv_rows_for_manual_clients(self):
-		self.client.force_login(self.user)
+		force_login_with_verified_two_factor(self.client, self.user)
 		client = Client.objects.create(
 			name='Lina Mo',
 			email='lina@example.com',
@@ -923,7 +954,7 @@ class ClientManagementViewTests(TestCase):
 		self.assertIn('Morning Flow', content)
 
 	def test_client_edit_updates_manual_client(self):
-		self.client.force_login(self.user)
+		force_login_with_verified_two_factor(self.client, self.user)
 		client = Client.objects.create(
 			name='Lina Mo',
 			email='lina@example.com',
@@ -945,7 +976,7 @@ class ClientManagementViewTests(TestCase):
 		self.assertEqual(list(client.reminder_classes.all()), [self.class_two])
 
 	def test_client_delete_removes_manual_client(self):
-		self.client.force_login(self.user)
+		force_login_with_verified_two_factor(self.client, self.user)
 		client = Client.objects.create(
 			name='Lina Mo',
 			email='lina@example.com',
@@ -958,7 +989,7 @@ class ClientManagementViewTests(TestCase):
 		self.assertFalse(Client.objects.filter(pk=client.pk).exists())
 
 	def test_client_form_reminder_labels_use_localized_time(self):
-		self.client.force_login(self.user)
+		force_login_with_verified_two_factor(self.client, self.user)
 		response = self.client.get('/instructor/clients/')
 		self.assertEqual(response.status_code, 200)
 
@@ -970,7 +1001,7 @@ class ClientManagementViewTests(TestCase):
 		self.assertTrue(expected_en in content or expected_da in content)
 
 	def test_export_sms_reminders_includes_weekly_unbooked_today_participants(self):
-		self.client.force_login(self.user)
+		force_login_with_verified_two_factor(self.client, self.user)
 
 		now = timezone.now()
 		weekly_class = YogaClass.objects.create(
@@ -1001,7 +1032,7 @@ class ClientManagementViewTests(TestCase):
 		self.assertIn('Weekly Noon Flow', content)
 
 	def test_export_sms_reminders_excludes_weekly_participant_when_already_booked(self):
-		self.client.force_login(self.user)
+		force_login_with_verified_two_factor(self.client, self.user)
 
 		now = timezone.now()
 		weekly_class = YogaClass.objects.create(
@@ -1037,7 +1068,7 @@ class ClientManagementViewTests(TestCase):
 		self.assertNotIn('weekly_unbooked_today', content)
 
 	def test_export_sms_reminders_excludes_prebooked_participants(self):
-		self.client.force_login(self.user)
+		force_login_with_verified_two_factor(self.client, self.user)
 
 		now = timezone.now()
 		weekly_class = YogaClass.objects.create(
@@ -1076,7 +1107,7 @@ class ClientManagementViewTests(TestCase):
 	)
 	@patch('booking.sms_service.urllib_request.urlopen')
 	def test_send_sms_reminders_uses_gateway_for_manual_clients(self, mock_urlopen):
-		self.client.force_login(self.user)
+		force_login_with_verified_two_factor(self.client, self.user)
 		client = Client.objects.create(
 			name='Lina Mo',
 			email='lina@example.com',
@@ -1096,7 +1127,7 @@ class ClientManagementViewTests(TestCase):
 		self.assertEqual(log.normalized_phone, '4599887766')
 
 	def test_send_sms_reminders_requires_gateway_config(self):
-		self.client.force_login(self.user)
+		force_login_with_verified_two_factor(self.client, self.user)
 		response = self.client.post('/instructor/clients/reminders/send/')
 		self.assertEqual(response.status_code, 302)
 
@@ -1110,7 +1141,7 @@ class ClientManagementViewTests(TestCase):
 	)
 	@patch('booking.sms_service.urllib_request.urlopen')
 	def test_send_sms_reminders_logs_invalid_phone_as_failed(self, mock_urlopen):
-		self.client.force_login(self.user)
+		force_login_with_verified_two_factor(self.client, self.user)
 		client = Client.objects.create(
 			name='Lina Mo',
 			email='lina@example.com',
@@ -1359,7 +1390,7 @@ class InstructorStudioAccessTests(TestCase):
 		)
 
 	def test_instructor_dashboard_uses_membership_studio(self):
-		self.client.force_login(self.user)
+		force_login_with_verified_two_factor(self.client, self.user)
 
 		response = self.client.get('/instructor/')
 
@@ -1368,7 +1399,7 @@ class InstructorStudioAccessTests(TestCase):
 		self.assertNotContains(response, 'Default Flow')
 
 	def test_instructor_class_create_uses_membership_studio(self):
-		self.client.force_login(self.user)
+		force_login_with_verified_two_factor(self.client, self.user)
 
 		response = self.client.post('/instructor/classes/new/', data={
 			'title': 'Studio Managed Flow',
@@ -1395,14 +1426,20 @@ class InstructorStudioAccessTests(TestCase):
 			email='no-studio@example.com',
 			password='test-pass-123',
 		)
-		self.client.force_login(unassigned_user)
+		force_login_with_verified_two_factor(self.client, unassigned_user)
 
 		response = self.client.get('/instructor/')
 
 		self.assertEqual(response.status_code, 403)
 
+	def test_instructor_dashboard_redirects_anonymous_users_to_staff_login(self):
+		response = self.client.get('/instructor/')
+
+		self.assertEqual(response.status_code, 302)
+		self.assertEqual(response.headers['Location'], '/studio/login/?next=/instructor/')
+
 	def test_instructor_sidebar_shows_studio_logo(self):
-		self.client.force_login(self.user)
+		force_login_with_verified_two_factor(self.client, self.user)
 		logo_bytes = (
 			b'\x47\x49\x46\x38\x39\x61\x01\x00\x01\x00\x80\x00\x00'
 			b'\x00\x00\x00\xff\xff\xff\x21\xf9\x04\x01\x00\x00\x00\x00'
@@ -1594,3 +1631,27 @@ class TwoFactorAuthTests(TestCase):
 
 		admin_response = self.client.get('/admin/')
 		self.assertEqual(admin_response.status_code, 200)
+
+	def test_instructor_requires_authenticator_verification_after_password_login(self):
+		device = UserAuthenticatorDevice(user=self.superuser)
+		device.set_secret(pyotp.random_base32(), confirmed=True)
+		device.save()
+
+		self.client.force_login(self.superuser)
+
+		response = self.client.get('/instructor/')
+
+		self.assertEqual(response.status_code, 302)
+		self.assertIn('/two-factor/verify/', response.headers['Location'])
+		self.assertIn('next=%2Finstructor%2F', response.headers['Location'])
+
+		verify_response = self.client.post('/two-factor/verify/?next=/instructor/', data={
+			'token': pyotp.TOTP(device.secret).now(),
+			'next': '/instructor/',
+		})
+
+		self.assertEqual(verify_response.status_code, 302)
+		self.assertEqual(verify_response.headers['Location'], '/instructor/')
+
+		instructor_response = self.client.get('/instructor/')
+		self.assertEqual(instructor_response.status_code, 200)

@@ -15,7 +15,7 @@ TWO_FACTOR_EXEMPT_PATH_PREFIXES = (
     '/studio/login/',
     '/studio/logout/',
 )
-TWO_FACTOR_PROTECTED_PATH_PREFIXES = ('/admin/', '/studio/')
+TWO_FACTOR_PROTECTED_PATH_PREFIXES = ('/admin/', '/studio/', '/instructor/')
 
 
 def is_two_factor_protected_path(path):

@@ -27,6 +27,8 @@ def _default_next_url(request):
     next_url = request.GET.get('next') or request.POST.get('next') or ''
     if next_url.startswith('/admin/'):
         return '/admin/'
+    if next_url.startswith('/instructor/'):
+        return '/instructor/'
     return '/studio/'
 
 
@@ -82,8 +84,8 @@ def setup(request):
             messages.success(
                 request,
                 _msg(
-                    'Authenticator login is now enabled for admin and studio access.',
-                    'Authenticator-login er nu aktiveret til admin og studioadgang.',
+                    'Authenticator login is now enabled for admin, studio, and instructor access.',
+                    'Authenticator-login er nu aktiveret til admin-, studio- og instruktøradgang.',
                 ),
             )
             return redirect(next_url)
