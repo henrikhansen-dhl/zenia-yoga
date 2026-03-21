@@ -353,6 +353,26 @@ class BookingForm(forms.ModelForm):
         return booking
 
 
+class PublicUnbookingForm(forms.Form):
+    client_phone = forms.CharField(max_length=40)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        is_danish = (get_language() or 'en').startswith('da')
+        self.fields['client_phone'].label = 'Telefon' if is_danish else 'Phone'
+        self.fields['client_phone'].widget.attrs['placeholder'] = (
+            'Telefonnummer brugt ved booking' if is_danish else 'Phone number used for booking'
+        )
+
+    def clean_client_phone(self):
+        phone = (self.cleaned_data.get('client_phone') or '').strip()
+        if not phone:
+            raise forms.ValidationError(
+                'Telefonnummer er påkrævet.' if (get_language() or 'en').startswith('da') else 'Phone number is required.'
+            )
+        return phone
+
+
 class ClientForm(forms.ModelForm):
     class Meta:
         model = Client
@@ -428,10 +448,16 @@ class WeeklyParticipantsForm(forms.Form):
         required=False,
         widget=forms.SelectMultiple(attrs={'size': 8}),
     )
+    prebooked_participants = forms.ModelMultipleChoiceField(
+        queryset=Client.objects.none(),
+        required=False,
+        widget=forms.SelectMultiple(attrs={'size': 8}),
+    )
 
-    def __init__(self, *args, studio=None, **kwargs):
+    def __init__(self, *args, studio=None, capacity=None, **kwargs):
         super().__init__(*args, **kwargs)
         studio = studio or Studio.get_default()
+        self.capacity = capacity
         language = get_language() or 'en'
         is_danish = language.startswith('da')
 
@@ -439,19 +465,56 @@ class WeeklyParticipantsForm(forms.Form):
         self.fields['participants'].label = (
             'Deltagere i ugentlig serie'
             if is_danish else
-            'Participants in weekly series'
+            'Reminder-only participants'
         )
         self.fields['participants'].help_text = (
             'Disse deltagere kan få påmindelse på dagen hvis de endnu ikke har booket plads.'
             if is_danish else
             'These participants can receive day-of reminders if they have not reserved a seat yet.'
         )
+        self.fields['prebooked_participants'].queryset = self.fields['participants'].queryset
+        self.fields['prebooked_participants'].label = (
+            'Forudbookede deltagere'
+            if is_danish else
+            'Prebooked participants'
+        )
+        self.fields['prebooked_participants'].help_text = (
+            'Disse deltagere får automatisk en plads på de næste ugentlige hold og skal selv afbooke, hvis de ikke kommer.'
+            if is_danish else
+            'These participants automatically keep a seat for the next weekly classes and must unbook if they cannot attend.'
+        )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        participants = set(cleaned_data.get('participants', []))
+        prebooked_participants = set(cleaned_data.get('prebooked_participants', []))
+        if participants & prebooked_participants:
+            raise forms.ValidationError(
+                'En deltager kan kun være på én ugentlig liste ad gangen.'
+                if (get_language() or 'en').startswith('da') else
+                'A client can only be on one weekly list at a time.'
+            )
+        if self.capacity is not None and len(prebooked_participants) > self.capacity:
+            raise forms.ValidationError(
+                f'Du kan højst have {self.capacity} forudbookede deltagere, fordi holdets kapacitet er {self.capacity}.'
+                if (get_language() or 'en').startswith('da') else
+                f'You can only have {self.capacity} prebooked participants because the class capacity is {self.capacity}.'
+            )
+        return cleaned_data
 
 
 class WeeklyParticipantQuickAddForm(forms.Form):
+    TYPE_REMINDER = 'reminder'
+    TYPE_PREBOOKED = 'prebooked'
+    TYPE_CHOICES = [
+        (TYPE_REMINDER, 'Reminder'),
+        (TYPE_PREBOOKED, 'Prebooked'),
+    ]
+
     name = forms.CharField(max_length=120)
     email = forms.EmailField(max_length=254, required=False)
     phone = forms.CharField(max_length=40)
+    registration_type = forms.ChoiceField(choices=TYPE_CHOICES)
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -461,12 +524,17 @@ class WeeklyParticipantQuickAddForm(forms.Form):
         self.fields['name'].label = 'Navn' if is_danish else 'Name'
         self.fields['email'].label = 'E-mail' if is_danish else 'Email'
         self.fields['phone'].label = 'Telefon' if is_danish else 'Phone'
+        self.fields['registration_type'].label = 'Registreringstype' if is_danish else 'Registration type'
 
         self.fields['name'].widget.attrs['placeholder'] = 'Klientens navn' if is_danish else 'Client name'
         self.fields['email'].widget.attrs['placeholder'] = 'client@example.com'
         self.fields['phone'].widget.attrs['placeholder'] = (
             'Telefonnummer' if is_danish else 'Phone number'
         )
+        self.fields['registration_type'].choices = [
+            (self.TYPE_REMINDER, 'Påmindelse samme dag' if is_danish else 'Same-day reminder'),
+            (self.TYPE_PREBOOKED, 'Forudbook plads' if is_danish else 'Prebook a seat'),
+        ]
 
     def clean_email(self):
         return (self.cleaned_data.get('email') or '').strip().lower()

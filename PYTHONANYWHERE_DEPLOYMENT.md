@@ -100,7 +100,19 @@ Also copy/upload media files to:
 cd /home/henrikhansen/yoga-platforms
 source .venv/bin/activate
 python manage.py migrate
+python manage.py provision_studio_db --all
+python manage.py check_studio_migrations --all
 python manage.py collectstatic --noinput
+```
+
+Why these extra commands matter:
+
+- `python manage.py provision_studio_db --all` ensures every per-studio SQLite database exists and has the latest booking schema.
+- `python manage.py check_studio_migrations --all` reports whether any studio database is behind on booking migrations.
+- If you want deployment to stop when a studio DB is behind, use:
+
+```bash
+python manage.py check_studio_migrations --all --fail-on-drift
 ```
 
 If needed, create admin user:
@@ -159,6 +171,7 @@ cd /home/henrikhansen/yoga-platforms
 source .venv/bin/activate
 python manage.py check
 python manage.py showmigrations
+python manage.py check_studio_migrations --all --fail-on-drift
 python manage.py shell -c "from django.conf import settings; print(settings.DATABASES['default']['ENGINE']); print(settings.DATABASES['default']['NAME']); print(settings.ALLOWED_HOSTS)"
 python manage.py collectstatic --noinput
 python manage.py shell -c "from django.db import connections; connections['default'].cursor(); print('MySQL connection OK')"
@@ -168,6 +181,7 @@ Expected results:
 
 - `python manage.py check` finishes without critical errors.
 - `showmigrations` shows applied migrations after `python manage.py migrate`.
+- `check_studio_migrations --all --fail-on-drift` exits cleanly and reports each studio DB as `Up to date.`
 - Database engine prints `django.db.backends.mysql`.
 - Allowed hosts includes `henrikhansen.pythonanywhere.com`.
 - Final command prints `MySQL connection OK`.
@@ -193,6 +207,11 @@ Expected results:
 - **500 error after changes**:
   - Check error log in the Web tab.
   - Reload web app after fixes.
+
+- **Studio page fails with missing booking columns or tables**:
+  - Run: `python manage.py provision_studio_db --all`
+  - Then run: `python manage.py check_studio_migrations --all`
+  - If any studio is behind, run the provision command again before reloading.
 
 ## Optional fallback: use SQLite for default DB
 

@@ -142,12 +142,12 @@
     {% if participants_form %}
     <section class="instr-card">
         <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Ugentlige deltagere{% else %}Weekly participants{% endif %}</p>
-        <h2>{% if request.LANGUAGE_CODE == 'da' %}Påmindelser på hold-dagen{% else %}Class-day reminder list{% endif %}</h2>
+        <h2>{% if request.LANGUAGE_CODE == 'da' %}To måder at registrere deltagere{% else %}Two ways to register participants{% endif %}</h2>
         <p class="instr-empty">
             {% if request.LANGUAGE_CODE == 'da' %}
-            Vælg deltagere som skal have en påmindelse på dagen, hvis de ikke har booket plads endnu.
+            Brug den ene liste til deltagere som selv skal booke og få en påmindelse samme dag. Brug den anden liste til deltagere som automatisk får en plads og selv skal afbooke, hvis de ikke kommer.
             {% else %}
-            Select participants who should get a same-day reminder if they have not booked a seat yet.
+            Use one list for clients who must book themselves and get a same-day reminder. Use the other list for clients who automatically keep a seat and must unbook if they cannot attend.
             {% endif %}
         </p>
 
@@ -159,14 +159,23 @@
                 {% if participants_form.participants.help_text %}<p class="field-help">{{ participants_form.participants.help_text }}</p>{% endif %}
                 {% if participants_form.participants.errors %}<div class="field-error">{{ participants_form.participants.errors|join:', ' }}</div>{% endif %}
             </div>
+            <div class="form-row">
+                <label for="{{ participants_form.prebooked_participants.id_for_label }}">{{ participants_form.prebooked_participants.label }}</label>
+                {{ participants_form.prebooked_participants }}
+                {% if participants_form.prebooked_participants.help_text %}<p class="field-help">{{ participants_form.prebooked_participants.help_text }}</p>{% endif %}
+                {% if participants_form.prebooked_participants.errors %}<div class="field-error">{{ participants_form.prebooked_participants.errors|join:', ' }}</div>{% endif %}
+            </div>
+            {% if participants_form.non_field_errors %}
+            <div class="form-errors">{{ participants_form.non_field_errors }}</div>
+            {% endif %}
             <div class="instr-form-actions">
-                <button class="button-primary" type="submit">{% if request.LANGUAGE_CODE == 'da' %}Gem deltagere{% else %}Save participants{% endif %}</button>
+                <button class="button-primary" type="submit">{% if request.LANGUAGE_CODE == 'da' %}Gem ugentlig registrering{% else %}Save weekly registration{% endif %}</button>
             </div>
         </form>
 
         {% if series_participants %}
         <div class="series-participant-list">
-            <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Aktuelle deltagere{% else %}Current participants{% endif %}</p>
+            <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Påmindelse samme dag{% else %}Same-day reminders{% endif %}</p>
             <ul>
                 {% for participant in series_participants %}
                 <li>
@@ -176,7 +185,27 @@
                     </div>
                     <form method="post" action="{% url 'instructor:class_participant_remove' yoga_class.pk participant.pk %}" class="inline-form">
                         {% csrf_token %}
-                        <button type="submit" class="btn-remove" onclick="return confirm('{% if request.LANGUAGE_CODE == 'da' %}Fjern {{ participant.name }} fra ugentlige deltagere?{% else %}Remove {{ participant.name }} from weekly participants?{% endif %}')">{% if request.LANGUAGE_CODE == 'da' %}Fjern{% else %}Remove{% endif %}</button>
+                        <button type="submit" class="btn-remove" onclick="return confirm('{% if request.LANGUAGE_CODE == 'da' %}Fjern {{ participant.name }} fra den ugentlige registrering?{% else %}Remove {{ participant.name }} from weekly registration?{% endif %}')">{% if request.LANGUAGE_CODE == 'da' %}Fjern{% else %}Remove{% endif %}</button>
+                    </form>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        {% if series_prebooked_participants %}
+        <div class="series-participant-list">
+            <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Forudbookede pladser{% else %}Prebooked seats{% endif %}</p>
+            <ul>
+                {% for participant in series_prebooked_participants %}
+                <li>
+                    <div>
+                        <strong>{{ participant.name }}</strong>
+                        <div class="client-email">{{ participant.email }}</div>
+                    </div>
+                    <form method="post" action="{% url 'instructor:class_participant_remove' yoga_class.pk participant.pk %}" class="inline-form">
+                        {% csrf_token %}
+                        <button type="submit" class="btn-remove" onclick="return confirm('{% if request.LANGUAGE_CODE == 'da' %}Fjern {{ participant.name }} fra den ugentlige registrering?{% else %}Remove {{ participant.name }} from weekly registration?{% endif %}')">{% if request.LANGUAGE_CODE == 'da' %}Fjern{% else %}Remove{% endif %}</button>
                     </form>
                 </li>
                 {% endfor %}
@@ -202,6 +231,10 @@
             <div class="form-row">
                 <label for="{{ participant_quick_add_form.phone.id_for_label }}">{{ participant_quick_add_form.phone.label }}</label>
                 {{ participant_quick_add_form.phone }}
+            </div>
+            <div class="form-row">
+                <label for="{{ participant_quick_add_form.registration_type.id_for_label }}">{{ participant_quick_add_form.registration_type.label }}</label>
+                {{ participant_quick_add_form.registration_type }}
             </div>
             <div class="instr-form-actions">
                 <button class="button-secondary" type="submit">{% if request.LANGUAGE_CODE == 'da' %}Tilføj deltager{% else %}Add participant{% endif %}</button>

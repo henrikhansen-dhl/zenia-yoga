@@ -16,6 +16,8 @@ import sys
 
 from django.conf import settings
 from django.core.management import call_command
+from django.db import connections
+from django.db.migrations.executor import MigrationExecutor
 
 _local = threading.local()
 _verified_studio_aliases = set()
@@ -91,13 +93,12 @@ def _studio_db_has_booking_schema(slug: str) -> bool:
 
 
 def ensure_studio_database(slug: str, verbosity: int = 0) -> str:
-    """Register the studio DB and lazily create booking schema when needed."""
+    """Register the studio DB and ensure booking migrations are applied."""
     alias = register_studio_db(slug)
     if _RUNNING_TESTS or alias in _verified_studio_aliases:
         return alias
 
-    if not _studio_db_has_booking_schema(slug):
-        call_command('migrate', 'booking', database=alias, verbosity=verbosity, interactive=False)
+    call_command('migrate', 'booking', database=alias, verbosity=verbosity, interactive=False)
 
     _verified_studio_aliases.add(alias)
     return alias
@@ -137,6 +138,25 @@ def provision_studio_database(slug: str, verbosity: int = 0) -> str:
     """
     alias = ensure_studio_database(slug, verbosity=verbosity)
     return alias
+
+
+def get_studio_migration_status(slug: str) -> dict:
+    """Return booking migration status details for a studio database."""
+    alias = register_studio_db(slug)
+    connection = connections[alias]
+    executor = MigrationExecutor(connection)
+    targets = executor.loader.graph.leaf_nodes('booking')
+    plan = executor.migration_plan(targets)
+    pending_migrations = [
+        migration.name
+        for migration, backwards in plan
+        if not backwards and migration.app_label == 'booking'
+    ]
+    return {
+        'alias': alias,
+        'database_name': str(connection.settings_dict.get('NAME', '')),
+        'pending_migrations': pending_migrations,
+    }
 
 
 def deactivate_studio() -> None:

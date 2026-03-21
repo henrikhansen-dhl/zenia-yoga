@@ -73,6 +73,39 @@
                 <a class="button-secondary" href="{% url 'booking:class_list' studio.slug %}">{% if request.LANGUAGE_CODE == 'da' %}Tilbage til alle hold{% else %}Back to all classes{% endif %}</a>
             </div>
         {% endif %}
+
+        {% if not yoga_class.is_past %}
+            <hr class="section-divider">
+            <div class="booking-header">
+                <p class="eyebrow">{% if request.LANGUAGE_CODE == 'da' %}Kan du ikke komme?{% else %}Need to cancel?{% endif %}</p>
+                <h3>{% if request.LANGUAGE_CODE == 'da' %}Afbook din plads{% else %}Release your seat{% endif %}</h3>
+            </div>
+            <p class="instr-empty">
+                {% if request.LANGUAGE_CODE == 'da' %}
+                Hvis du allerede er booket eller forudbooket på dette hold, kan du afbooke her med dit telefonnummer.
+                {% else %}
+                If you already have a booking or a prebooked seat for this class, you can release it here with your phone number.
+                {% endif %}
+            </p>
+            <form method="post" class="booking-form">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="unbook">
+
+                {% if unbooking_form.non_field_errors %}
+                    <div class="form-errors">{{ unbooking_form.non_field_errors }}</div>
+                {% endif %}
+
+                <div class="form-row">
+                    <label for="{{ unbooking_form.client_phone.id_for_label }}">{{ unbooking_form.client_phone.label }}</label>
+                    {{ unbooking_form.client_phone }}
+                    {% if unbooking_form.client_phone.errors %}
+                        <div class="field-error">{{ unbooking_form.client_phone.errors|join:', ' }}</div>
+                    {% endif %}
+                </div>
+
+                <button class="button-secondary button-full" type="submit">{% if request.LANGUAGE_CODE == 'da' %}Afbook plads{% else %}Unbook seat{% endif %}</button>
+            </form>
+        {% endif %}
     </aside>
 </section>
 {% endblock %}

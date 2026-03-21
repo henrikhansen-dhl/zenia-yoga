@@ -347,6 +347,8 @@ def class_detail(request, pk):
     yoga_class = get_object_or_404(YogaClass, pk=pk, studio=request.studio)
     yoga_class.sync_weekly_occurrences(upcoming_limit=2)
     root_class = yoga_class.recurrence_root
+    root_class.sync_series_prebookings(upcoming_limit=2)
+    yoga_class.refresh_from_db()
     bookings = yoga_class.bookings.order_by('created_at')
     manual_booking_form = BookingForm(yoga_class=yoga_class)
     participants_form = None
@@ -354,7 +356,11 @@ def class_detail(request, pk):
     if root_class.is_weekly_recurring:
         participants_form = WeeklyParticipantsForm(
             studio=root_class.studio,
-            initial={'participants': root_class.series_participants.all()},
+            capacity=root_class.capacity,
+            initial={
+                'participants': root_class.series_participants.all(),
+                'prebooked_participants': root_class.series_prebooked_participants.all(),
+            },
         )
         participant_quick_add_form = WeeklyParticipantQuickAddForm()
 
@@ -366,6 +372,7 @@ def class_detail(request, pk):
         'participants_form': participants_form,
         'participant_quick_add_form': participant_quick_add_form,
         'series_participants': root_class.series_participants.all().order_by('name') if root_class.is_weekly_recurring else [],
+        'series_prebooked_participants': root_class.series_prebooked_participants.all().order_by('name') if root_class.is_weekly_recurring else [],
         'series_upcoming': [
             yoga_item
             for yoga_item in root_class.series_queryset().filter(start_time__gte=timezone.now())
@@ -386,7 +393,11 @@ def class_booking_add(request, pk):
     if form.is_valid():
         booking = form.save(commit=False)
         booking.studio = request.studio
+        booking.source = Booking.SOURCE_INSTRUCTOR
         booking.save()
+        prebooked_client = yoga_class.prebooked_participant_by_phone(booking.client_phone)
+        if prebooked_client:
+            yoga_class.clear_prebooked_client_opt_out(prebooked_client)
         messages.success(
             request,
             _msg(
@@ -414,13 +425,20 @@ def class_participants_update(request, pk):
         return redirect('instructor:class_detail', pk=yoga_class.pk)
 
     if request.method == 'POST':
-        form = WeeklyParticipantsForm(request.POST, studio=root_class.studio)
+        form = WeeklyParticipantsForm(request.POST, studio=root_class.studio, capacity=root_class.capacity)
         if form.is_valid():
             root_class.series_participants.set(form.cleaned_data['participants'])
+            root_class.series_prebooked_participants.set(form.cleaned_data['prebooked_participants'])
+            root_class.sync_series_prebookings(upcoming_limit=2)
             messages.success(
                 request,
-                _msg('Weekly participants have been updated.', 'Ugentlige deltagere er opdateret.'),
+                _msg('Weekly registrations have been updated.', 'Ugentlige registreringer er opdateret.'),
             )
+        else:
+            first_error = next(iter(form.non_field_errors()), None) or (
+                next(iter(form.errors.values()))[0] if form.errors else _msg('Invalid form data.', 'Ugyldige formulardata.')
+            )
+            messages.error(request, first_error)
 
     return redirect('instructor:class_detail', pk=yoga_class.pk)
 
@@ -468,13 +486,38 @@ def class_participant_quick_add(request, pk):
                 if changed:
                     client.save()
 
-            root_class.series_participants.add(client)
+            registration_type = form.cleaned_data['registration_type']
+            if registration_type == WeeklyParticipantQuickAddForm.TYPE_PREBOOKED:
+                if (
+                    not root_class.series_prebooked_participants.filter(pk=client.pk).exists()
+                    and root_class.series_prebooked_participants.count() >= root_class.capacity
+                ):
+                    messages.error(
+                        request,
+                        _msg(
+                            f'This class already has {root_class.capacity} prebooked participants, which matches its capacity.',
+                            f'Dette hold har allerede {root_class.capacity} forudbookede deltagere, som svarer til kapaciteten.',
+                        ),
+                    )
+                    return redirect('instructor:class_detail', pk=yoga_class.pk)
+                root_class.series_prebooked_participants.add(client)
+                root_class.series_participants.remove(client)
+                root_class.sync_series_prebookings(upcoming_limit=2)
+                success_message = _msg(
+                    f'"{client.name}" has been added as prebooked in the weekly series.',
+                    f'"{client.name}" er tilføjet som forudbooket i den ugentlige serie.',
+                )
+            else:
+                root_class.series_participants.add(client)
+                root_class.series_prebooked_participants.remove(client)
+                root_class.sync_series_prebookings(upcoming_limit=2)
+                success_message = _msg(
+                    f'"{client.name}" has been added to weekly reminders.',
+                    f'"{client.name}" er tilføjet til ugentlige påmindelser.',
+                )
             messages.success(
                 request,
-                _msg(
-                    f'"{client.name}" has been added to weekly participants.',
-                    f'"{client.name}" er tilføjet til ugentlige deltagere.',
-                ),
+                success_message,
             )
         else:
             first_error = next(iter(form.errors.values()))[0] if form.errors else _msg('Invalid form data.', 'Ugyldige formulardata.')
@@ -498,11 +541,13 @@ def class_participant_remove(request, pk, client_pk):
     if request.method == 'POST':
         client = get_object_or_404(Client, pk=client_pk, studio=root_class.studio)
         root_class.series_participants.remove(client)
+        root_class.series_prebooked_participants.remove(client)
+        root_class.sync_series_prebookings(upcoming_limit=2)
         messages.success(
             request,
             _msg(
-                f'"{client.name}" has been removed from weekly participants.',
-                f'"{client.name}" er fjernet fra ugentlige deltagere.',
+                f'"{client.name}" has been removed from weekly registration.',
+                f'"{client.name}" er fjernet fra den ugentlige registrering.',
             ),
         )
 
@@ -562,6 +607,9 @@ def booking_delete(request, pk):
     class_pk = booking.yoga_class_id
     if request.method == 'POST':
         name = booking.client_name
+        prebooked_client = booking.yoga_class.prebooked_participant_by_phone(booking.client_phone)
+        if prebooked_client:
+            booking.yoga_class.mark_prebooked_client_opted_out(prebooked_client)
         booking.delete()
         messages.success(
             request,

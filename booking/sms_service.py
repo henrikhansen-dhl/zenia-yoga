@@ -116,8 +116,8 @@ def build_sms_rows(studio, site_url: str, now=None) -> list[dict]:
     1. **Class-interest reminders** – clients whose ``reminder_classes``
        M2M includes an upcoming published class (start_time ≥ now).
 
-    2. **Weekly "today" reminders** – clients in a weekly series
-       (``series_participants``) whose class is happening *today* and
+     2. **Weekly "today" reminders** – clients in a weekly reminder list
+         (``series_participants``) whose class is happening *today* and
        who have not yet booked a spot.
 
     ``site_url``  Full base URL used to build booking links, e.g.

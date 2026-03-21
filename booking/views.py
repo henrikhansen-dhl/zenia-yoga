@@ -5,8 +5,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.translation import get_language
 
-from .forms import BookingForm
-from .models import Studio, YogaClass
+from .forms import BookingForm, PublicUnbookingForm
+from .models import Booking, Studio, YogaClass
 from .studio_db import STUDIO_DB_PREFIX, activate_studio, register_all_studio_dbs
 
 
@@ -80,28 +80,67 @@ def class_detail(request, studio_slug, pk):
 	request.studio = studio
 	YogaClass.sync_all_weekly_occurrences(upcoming_limit=2)
 	yoga_class = get_object_or_404(YogaClass, pk=pk, is_published=True, studio=studio)
+	form = BookingForm(yoga_class=yoga_class)
+	unbooking_form = PublicUnbookingForm()
 
 	if request.method == 'POST':
-		with transaction.atomic():
-			locked_class = YogaClass.objects.select_for_update().get(pk=yoga_class.pk)
-			yoga_class = locked_class
-			form = BookingForm(request.POST, yoga_class=locked_class)
-			if form.is_valid():
-				form.save()
-				is_danish = (get_language() or 'en').startswith('da')
-				messages.success(
+		action = request.POST.get('action') or 'book'
+		if action == 'unbook':
+			unbooking_form = PublicUnbookingForm(request.POST)
+			if yoga_class.is_past:
+				messages.error(
 					request,
-					'Din plads er booket. Bekræftelsen er gemt i systemet.'
-					if is_danish else
-					'Your place is booked. A confirmation is saved in the system.',
+					'Dette hold er allerede startet, så pladsen kan ikke længere afbookes.'
+					if (get_language() or 'en').startswith('da') else
+					'This class has already started, so the seat can no longer be released.',
 				)
-				return redirect('booking:class_list', studio_slug=studio.slug)
-	else:
-		form = BookingForm(yoga_class=yoga_class)
+			elif unbooking_form.is_valid():
+				phone = unbooking_form.cleaned_data['client_phone']
+				booking = yoga_class.bookings.filter(client_phone=phone).order_by('-created_at').first()
+				if not booking:
+					messages.error(
+						request,
+						'Vi kunne ikke finde en booking med det telefonnummer på dette hold.'
+						if (get_language() or 'en').startswith('da') else
+						'We could not find a booking with that phone number for this class.',
+					)
+				else:
+					prebooked_client = yoga_class.prebooked_participant_by_phone(phone)
+					if prebooked_client:
+						yoga_class.mark_prebooked_client_opted_out(prebooked_client)
+					booking.delete()
+					messages.success(
+						request,
+						'Din plads er afbooket for dette hold.'
+						if (get_language() or 'en').startswith('da') else
+						'Your seat has been released for this class.',
+					)
+					return redirect('booking:class_detail', studio_slug=studio.slug, pk=yoga_class.pk)
+		else:
+			with transaction.atomic():
+				locked_class = YogaClass.objects.select_for_update().get(pk=yoga_class.pk)
+				yoga_class = locked_class
+				form = BookingForm(request.POST, yoga_class=locked_class)
+				if form.is_valid():
+					booking = form.save(commit=False)
+					booking.source = Booking.SOURCE_PUBLIC
+					booking.save()
+					prebooked_client = locked_class.prebooked_participant_by_phone(booking.client_phone)
+					if prebooked_client:
+						locked_class.clear_prebooked_client_opt_out(prebooked_client)
+					is_danish = (get_language() or 'en').startswith('da')
+					messages.success(
+						request,
+						'Din plads er booket. Bekræftelsen er gemt i systemet.'
+						if is_danish else
+						'Your place is booked. A confirmation is saved in the system.',
+					)
+					return redirect('booking:class_list', studio_slug=studio.slug)
 
 	context = {
 		'yoga_class': yoga_class,
 		'form': form,
+		'unbooking_form': unbooking_form,
 		'studio': studio,
 	}
 	return render(request, 'booking/class_detail.html', context)

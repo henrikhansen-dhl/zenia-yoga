@@ -1,9 +1,11 @@
+from io import StringIO
 import tempfile
 from datetime import timedelta
 from unittest.mock import patch
 
 import pyotp
 from django.contrib.auth import get_user_model
+from django.core.management import CommandError, call_command
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
 from django.test import RequestFactory, SimpleTestCase, TestCase
@@ -14,8 +16,8 @@ from django.utils import timezone
 
 from .db_router import StudioDatabaseRouter
 from .middleware import StudioContextMiddleware
-from .forms import BookingForm, YogaClassForm
-from .models import Booking, Client, Feature, SmsReminderLog, Studio, StudioFeatureAccess, StudioInvoice, StudioMembership, UserAuthenticatorDevice, YogaClass
+from .forms import BookingForm, WeeklyParticipantQuickAddForm, YogaClassForm
+from .models import Booking, Client, Feature, SeriesPrebookingOptOut, SmsReminderLog, Studio, StudioFeatureAccess, StudioInvoice, StudioMembership, UserAuthenticatorDevice, YogaClass
 from .studio_db import deactivate_studio, set_current_studio_alias
 
 
@@ -121,6 +123,39 @@ class BookingFlowTests(TestCase):
 		self.assertContains(response, 'booking-success-banner')
 		self.assertContains(response, 'booking-success-title')
 		self.assertContains(response, 'booking-success-text')
+
+	def test_public_unbooking_releases_series_prebooked_seat_and_persists_opt_out(self):
+		participant = Client.objects.create(
+			studio=self.yoga_class.studio,
+			name='Asta',
+			email='asta@example.com',
+			phone='12345678',
+		)
+		self.yoga_class.is_weekly_recurring = True
+		self.yoga_class.save()
+		self.yoga_class.series_prebooked_participants.add(participant)
+		self.yoga_class.sync_series_prebookings(upcoming_limit=2)
+
+		self.assertTrue(
+			Booking.objects.filter(yoga_class=self.yoga_class, client_phone='12345678', source=Booking.SOURCE_SERIES_PREBOOK).exists()
+		)
+
+		response = self.client.post(
+			self.class_detail_url,
+			data={
+				'action': 'unbook',
+				'client_phone': '12345678',
+			},
+		)
+
+		self.assertEqual(response.status_code, 302)
+		self.assertFalse(Booking.objects.filter(yoga_class=self.yoga_class, client_phone='12345678').exists())
+		self.assertTrue(
+			SeriesPrebookingOptOut.objects.filter(yoga_class=self.yoga_class, client=participant).exists()
+		)
+
+		self.yoga_class.sync_series_prebookings(upcoming_limit=2)
+		self.assertFalse(Booking.objects.filter(yoga_class=self.yoga_class, client_phone='12345678').exists())
 
 	def test_public_class_list_shows_studio_logo_in_header(self):
 		logo_bytes = (
@@ -232,7 +267,7 @@ class WeeklyRecurrenceTests(TestCase):
 
 		response = self.client.post(
 			f'/instructor/classes/{root_class.pk}/participants/',
-			data={'participants': [participant.pk]},
+			data={'participants': [participant.pk], 'prebooked_participants': []},
 		)
 
 		self.assertEqual(response.status_code, 302)
@@ -271,6 +306,7 @@ class WeeklyRecurrenceTests(TestCase):
 				'name': 'Mette Holm',
 				'email': 'mette@example.com',
 				'phone': '22334455',
+				'registration_type': WeeklyParticipantQuickAddForm.TYPE_REMINDER,
 			},
 		)
 
@@ -316,6 +352,7 @@ class WeeklyRecurrenceTests(TestCase):
 				'name': 'Mette Holm',
 				'email': 'mette@example.com',
 				'phone': '99887766',
+				'registration_type': WeeklyParticipantQuickAddForm.TYPE_REMINDER,
 			},
 		)
 
@@ -359,7 +396,214 @@ class WeeklyRecurrenceTests(TestCase):
 				yoga_class=yoga_class,
 				client_phone='28789658',
 				client_name='Bente',
+				source=Booking.SOURCE_INSTRUCTOR,
 			).exists()
+		)
+
+	def test_quick_add_prebooked_participant_creates_series_booking(self):
+		user = get_user_model().objects.create_user(
+			username='series-prebook',
+			email='series-prebook@example.com',
+			password='test-pass-123',
+		)
+		StudioMembership.objects.create(
+			studio=self.default_studio,
+			user=user,
+			role=StudioMembership.ROLE_MANAGER,
+		)
+		self.client.force_login(user)
+
+		now = timezone.now()
+		root_class = YogaClass.objects.create(
+			title='Thursday Flow',
+			short_description='Weekly evening yoga.',
+			description='A recurring class.',
+			instructor_name='Zenia',
+			start_time=now + timedelta(days=1),
+			end_time=now + timedelta(days=1, hours=1),
+			capacity=10,
+			is_weekly_recurring=True,
+			is_published=True,
+		)
+
+		response = self.client.post(
+			f'/instructor/classes/{root_class.pk}/participants/add/',
+			data={
+				'name': 'Liva Holm',
+				'email': 'liva@example.com',
+				'phone': '21212121',
+				'registration_type': WeeklyParticipantQuickAddForm.TYPE_PREBOOKED,
+			},
+		)
+
+		self.assertEqual(response.status_code, 302)
+		client = Client.objects.get(phone='21212121')
+		self.assertIn(client, root_class.series_prebooked_participants.all())
+		self.assertTrue(
+			Booking.objects.filter(yoga_class=root_class, client_phone='21212121', source=Booking.SOURCE_SERIES_PREBOOK).exists()
+		)
+
+	def test_class_detail_counts_prebooked_series_bookings_in_capacity(self):
+		user = get_user_model().objects.create_user(
+			username='series-capacity-view',
+			email='series-capacity-view@example.com',
+			password='test-pass-123',
+		)
+		StudioMembership.objects.create(
+			studio=self.default_studio,
+			user=user,
+			role=StudioMembership.ROLE_MANAGER,
+		)
+		self.client.force_login(user)
+
+		now = timezone.now()
+		root_class = YogaClass.objects.create(
+			title='Thursday Flow',
+			short_description='Weekly evening yoga.',
+			description='A recurring class.',
+			instructor_name='Zenia',
+			start_time=now + timedelta(days=1),
+			end_time=now + timedelta(days=1, hours=1),
+			capacity=2,
+			is_weekly_recurring=True,
+			is_published=True,
+		)
+		participant = Client.objects.create(
+			studio=root_class.studio,
+			name='Liva Holm',
+			email='liva@example.com',
+			phone='21212121',
+		)
+		root_class.series_prebooked_participants.add(participant)
+
+		response = self.client.get(f'/instructor/classes/{root_class.pk}/')
+
+		self.assertEqual(response.status_code, 200)
+		root_class.refresh_from_db()
+		self.assertEqual(root_class.booked_count, 1)
+		self.assertEqual(root_class.spots_left, 1)
+		self.assertContains(response, '1 / 2')
+
+	def test_class_detail_counts_prebooked_participant_without_phone_in_capacity(self):
+		user = get_user_model().objects.create_user(
+			username='series-capacity-no-phone',
+			email='series-capacity-no-phone@example.com',
+			password='test-pass-123',
+		)
+		StudioMembership.objects.create(
+			studio=self.default_studio,
+			user=user,
+			role=StudioMembership.ROLE_MANAGER,
+		)
+		self.client.force_login(user)
+
+		now = timezone.now()
+		root_class = YogaClass.objects.create(
+			title='Thursday Flow',
+			short_description='Weekly evening yoga.',
+			description='A recurring class.',
+			instructor_name='Zenia',
+			start_time=now + timedelta(days=1),
+			end_time=now + timedelta(days=1, hours=1),
+			capacity=2,
+			is_weekly_recurring=True,
+			is_published=True,
+		)
+		participant = Client.objects.create(
+			studio=root_class.studio,
+			name='Karin',
+			email='karin@example.com',
+			phone='11111111',
+		)
+		Client.objects.filter(pk=participant.pk).update(phone='')
+		participant.refresh_from_db()
+		root_class.series_prebooked_participants.add(participant)
+
+		response = self.client.get(f'/instructor/classes/{root_class.pk}/')
+
+		self.assertEqual(response.status_code, 200)
+		root_class.refresh_from_db()
+		self.assertEqual(root_class.booked_count, 1)
+		self.assertEqual(root_class.spots_left, 1)
+		self.assertContains(response, '1 / 2')
+
+	def test_booking_clean_counts_phone_less_prebooked_seat_toward_capacity(self):
+		now = timezone.now()
+		root_class = YogaClass.objects.create(
+			title='Thursday Flow',
+			short_description='Weekly evening yoga.',
+			description='A recurring class.',
+			instructor_name='Zenia',
+			start_time=now + timedelta(days=1),
+			end_time=now + timedelta(days=1, hours=1),
+			capacity=1,
+			is_weekly_recurring=True,
+			is_published=True,
+		)
+		participant = Client.objects.create(
+			studio=root_class.studio,
+			name='Karin',
+			email='karin@example.com',
+			phone='11111111',
+		)
+		Client.objects.filter(pk=participant.pk).update(phone='')
+		participant.refresh_from_db()
+		root_class.series_prebooked_participants.add(participant)
+
+		booking = Booking(
+			yoga_class=root_class,
+			client_name='Henrik',
+			client_email='henrik@example.com',
+			client_phone='27117007',
+		)
+
+		with self.assertRaises(ValidationError):
+			booking.full_clean()
+
+	def test_prebooked_participants_cannot_exceed_capacity(self):
+		user = get_user_model().objects.create_user(
+			username='series-capacity-limit',
+			email='series-capacity-limit@example.com',
+			password='test-pass-123',
+		)
+		StudioMembership.objects.create(
+			studio=self.default_studio,
+			user=user,
+			role=StudioMembership.ROLE_MANAGER,
+		)
+		self.client.force_login(user)
+
+		now = timezone.now()
+		root_class = YogaClass.objects.create(
+			title='Thursday Flow',
+			short_description='Weekly evening yoga.',
+			description='A recurring class.',
+			instructor_name='Zenia',
+			start_time=now + timedelta(days=1),
+			end_time=now + timedelta(days=1, hours=1),
+			capacity=1,
+			is_weekly_recurring=True,
+			is_published=True,
+		)
+		first = Client.objects.create(studio=root_class.studio, name='One', email='one@example.com', phone='11111111')
+		second = Client.objects.create(studio=root_class.studio, name='Two', email='two@example.com', phone='22222222')
+
+		response = self.client.post(
+			f'/instructor/classes/{root_class.pk}/participants/',
+			data={
+				'participants': [],
+				'prebooked_participants': [first.pk, second.pk],
+			},
+			follow=True,
+		)
+
+		self.assertEqual(response.status_code, 200)
+		root_class.refresh_from_db()
+		self.assertEqual(root_class.series_prebooked_participants.count(), 0)
+		content = response.content.decode('utf-8')
+		self.assertTrue(
+			'You can only have 1 prebooked participants because the class capacity is 1.' in content
+			or 'Du kan højst have 1 forudbookede deltagere, fordi holdets kapacitet er 1.' in content
 		)
 
 	def test_class_detail_manual_booking_modal_lists_existing_clients(self):
@@ -730,6 +974,36 @@ class ClientManagementViewTests(TestCase):
 		self.assertEqual(response.status_code, 200)
 		self.assertNotIn('weekly_unbooked_today', content)
 
+	def test_export_sms_reminders_excludes_prebooked_participants(self):
+		self.client.force_login(self.user)
+
+		now = timezone.now()
+		weekly_class = YogaClass.objects.create(
+			title='Weekly Noon Flow',
+			short_description='Recurring lunch class.',
+			description='Recurring class for reminders.',
+			instructor_name='Elin',
+			start_time=now + timedelta(hours=2),
+			end_time=now + timedelta(hours=3),
+			capacity=8,
+			is_weekly_recurring=True,
+			is_published=True,
+		)
+
+		participant = Client.objects.create(
+			name='Nora Flint',
+			email='nora@example.com',
+			phone='55667788',
+		)
+		weekly_class.series_prebooked_participants.add(participant)
+		weekly_class.sync_series_prebookings(upcoming_limit=2)
+
+		response = self.client.get('/instructor/clients/reminders/export/')
+		content = response.content.decode('utf-8')
+
+		self.assertEqual(response.status_code, 200)
+		self.assertNotIn('weekly_unbooked_today', content)
+
 	@override_settings(
 		SMS_GATEWAY_ENABLED=True,
 		SMS_GATEWAY_URL='https://api.cpsms.dk/v2/send',
@@ -861,6 +1135,39 @@ class StudioPlatformTests(TestCase):
 				or 'Studiets database er klargjort.' in response.content.decode('utf-8')
 			)
 		)
+
+	@patch('booking.management.commands.check_studio_migrations.get_studio_migration_status')
+	def test_check_studio_migrations_reports_up_to_date_studios(self, mock_get_status):
+		studio = Studio.objects.create(name='North Studio', slug='north-studio')
+		mock_get_status.return_value = {
+			'alias': 'studio_north_studio',
+			'database_name': 'db_studio_north-studio.sqlite3',
+			'pending_migrations': [],
+		}
+
+		stdout = StringIO()
+		call_command('check_studio_migrations', '--studio', studio.slug, stdout=stdout)
+
+		output = stdout.getvalue()
+		self.assertIn('[North Studio] north-studio → studio_north_studio', output)
+		self.assertIn('Up to date.', output)
+		self.assertIn('All inspected studio databases are up to date.', output)
+
+	@patch('booking.management.commands.check_studio_migrations.get_studio_migration_status')
+	def test_check_studio_migrations_can_fail_on_drift(self, mock_get_status):
+		studio = Studio.objects.create(name='North Studio', slug='north-studio')
+		mock_get_status.return_value = {
+			'alias': 'studio_north_studio',
+			'database_name': 'db_studio_north-studio.sqlite3',
+			'pending_migrations': ['0013_weekly_prebookings'],
+		}
+
+		stdout = StringIO()
+		with self.assertRaises(CommandError):
+			call_command('check_studio_migrations', '--studio', studio.slug, '--fail-on-drift', stdout=stdout)
+
+		output = stdout.getvalue()
+		self.assertIn('Pending booking migrations: 0013_weekly_prebookings', output)
 
 	def test_studio_edit_page_shows_public_booking_url(self):
 		force_login_with_verified_two_factor(self.client, self.superuser)

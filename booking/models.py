@@ -323,6 +323,11 @@ class YogaClass(models.Model):
 		blank=True,
 		related_name='weekly_series_classes',
 	)
+	series_prebooked_participants = models.ManyToManyField(
+		'Client',
+		blank=True,
+		related_name='weekly_prebooked_series_classes',
+	)
 	is_published = models.BooleanField(default=True)
 	created_at = models.DateTimeField(auto_now_add=True)
 
@@ -368,11 +373,43 @@ class YogaClass(models.Model):
 
 	@property
 	def booked_count(self):
-		return self.bookings.count()
+		return self.bookings.count() + self.prebooked_reservation_count()
 
 	@property
 	def spots_left(self):
 		return max(self.capacity - self.booked_count, 0)
+
+	def prebooked_reservation_count(self, exclude_phone=None):
+		if self.is_past:
+			return 0
+
+		root = self.recurrence_root
+		if not root.is_weekly_recurring:
+			return 0
+
+		excluded_phone = (exclude_phone or '').strip()
+		opted_out_ids = set(self.series_prebooking_opt_outs.values_list('client_id', flat=True))
+		booked_phone_keys = {
+			(booking.client_phone or '').strip()
+			for booking in self.bookings.all()
+			if booking.client_phone
+		}
+
+		reserved_count = 0
+		for participant in root.series_prebooked_participants.all():
+			if participant.pk in opted_out_ids:
+				continue
+
+			participant_phone = (participant.phone or '').strip()
+			if excluded_phone and participant_phone and participant_phone == excluded_phone:
+				continue
+
+			if participant_phone and participant_phone in booked_phone_keys:
+				continue
+
+			reserved_count += 1
+
+		return reserved_count
 
 	@property
 	def is_past(self):
@@ -464,6 +501,7 @@ class YogaClass(models.Model):
 		now = now or timezone.now()
 		for yoga_class in cls.objects.filter(is_weekly_recurring=True, recurrence_parent__isnull=True):
 			yoga_class.sync_weekly_occurrences(upcoming_limit=upcoming_limit, now=now)
+			yoga_class.sync_series_prebookings(upcoming_limit=upcoming_limit, now=now)
 
 	def should_show_in_public_list(self, upcoming_limit=2, now=None):
 		now = self._as_aware(now or timezone.now())
@@ -477,6 +515,82 @@ class YogaClass(models.Model):
 
 		return start_time in root.upcoming_occurrence_starts(upcoming_limit=upcoming_limit, now=now)
 
+	def prebooked_participant_by_phone(self, phone):
+		normalized_phone = (phone or '').strip()
+		if not normalized_phone:
+			return None
+		return self.recurrence_root.series_prebooked_participants.filter(phone=normalized_phone).first()
+
+	def mark_prebooked_client_opted_out(self, client):
+		if not client or not self.recurrence_root.series_prebooked_participants.filter(pk=client.pk).exists():
+			return
+		SeriesPrebookingOptOut.objects.get_or_create(
+			studio=self.studio,
+			yoga_class=self,
+			client=client,
+		)
+
+	def clear_prebooked_client_opt_out(self, client):
+		if not client:
+			return
+		self.series_prebooking_opt_outs.filter(client=client).delete()
+
+	def sync_series_prebookings(self, upcoming_limit=2, now=None):
+		root = self.recurrence_root
+		if not root.is_weekly_recurring:
+			return
+
+		now = self._as_aware(now or timezone.now())
+		participants = {
+			participant.phone.strip(): participant
+			for participant in root.series_prebooked_participants.all().order_by('name')
+			if participant.phone
+		}
+
+		upcoming_classes = [
+			yoga_class
+			for yoga_class in root.series_queryset().filter(start_time__gte=now)
+			if yoga_class.should_show_in_public_list(upcoming_limit=upcoming_limit, now=now)
+		]
+
+		for yoga_class in upcoming_classes:
+			opted_out_phones = {
+				phone.strip()
+				for phone in yoga_class.series_prebooking_opt_outs.values_list('client__phone', flat=True)
+				if phone
+			}
+			active_phones = {
+				phone
+				for phone in participants
+				if phone not in opted_out_phones
+			}
+
+			yoga_class.bookings.filter(source=Booking.SOURCE_SERIES_PREBOOK).exclude(
+				client_phone__in=active_phones,
+			).delete()
+
+			existing_phones = {
+				(phone or '').strip()
+				for phone in yoga_class.bookings.values_list('client_phone', flat=True)
+				if phone
+			}
+
+			for phone, participant in participants.items():
+				if phone in opted_out_phones or phone in existing_phones:
+					continue
+				try:
+					Booking.objects.create(
+						studio=yoga_class.studio,
+						yoga_class=yoga_class,
+						client_name=participant.name,
+						client_email=participant.email,
+						client_phone=phone,
+						source=Booking.SOURCE_SERIES_PREBOOK,
+					)
+				except ValidationError:
+					continue
+				existing_phones.add(phone)
+
 	def save(self, *args, **kwargs):
 		if not self.studio_id:
 			self.studio = Studio.get_default()
@@ -486,6 +600,7 @@ class YogaClass(models.Model):
 		super().save(*args, **kwargs)
 		if not self.recurrence_parent_id:
 			self.sync_weekly_occurrences(upcoming_limit=2)
+			self.sync_series_prebookings(upcoming_limit=2)
 
 
 class Client(models.Model):
@@ -531,6 +646,50 @@ class Client(models.Model):
 			self.studio = Studio.get_default()
 		self.email = (self.email or '').strip().lower()
 		self.phone = (self.phone or '').strip()
+		self.full_clean()
+		super().save(*args, **kwargs)
+
+
+class SeriesPrebookingOptOut(models.Model):
+	studio = models.ForeignKey(
+		Studio,
+		on_delete=models.PROTECT,
+		related_name='series_prebooking_opt_outs',
+		db_constraint=False,
+	)
+	yoga_class = models.ForeignKey(
+		YogaClass,
+		on_delete=models.CASCADE,
+		related_name='series_prebooking_opt_outs',
+	)
+	client = models.ForeignKey(
+		Client,
+		on_delete=models.CASCADE,
+		related_name='series_prebooking_opt_outs',
+	)
+	created_at = models.DateTimeField(auto_now_add=True)
+
+	class Meta:
+		ordering = ['-created_at']
+		constraints = [
+			models.UniqueConstraint(
+				fields=['yoga_class', 'client'],
+				name='unique_series_prebooking_opt_out',
+			),
+		]
+
+	def clean(self):
+		if self.client_id and self.yoga_class_id and self.client.studio_id != self.yoga_class.studio_id:
+			raise ValidationError('Prebooking opt-outs must belong to the same studio as the class.')
+
+		if self.studio_id and self.yoga_class_id and self.studio_id != self.yoga_class.studio_id:
+			raise ValidationError('Prebooking opt-outs must belong to the same studio as the class.')
+
+	def save(self, *args, **kwargs):
+		if not self.studio_id and self.yoga_class_id:
+			self.studio_id = self.yoga_class.studio_id
+		elif not self.studio_id:
+			self.studio = Studio.get_default()
 		self.full_clean()
 		super().save(*args, **kwargs)
 
@@ -587,6 +746,15 @@ class SmsReminderLog(models.Model):
 
 
 class Booking(models.Model):
+	SOURCE_PUBLIC = 'public'
+	SOURCE_INSTRUCTOR = 'instructor'
+	SOURCE_SERIES_PREBOOK = 'series_prebook'
+	SOURCE_CHOICES = [
+		(SOURCE_PUBLIC, 'Public'),
+		(SOURCE_INSTRUCTOR, 'Instructor'),
+		(SOURCE_SERIES_PREBOOK, 'Series prebook'),
+	]
+
 	studio = models.ForeignKey(
 		Studio,
 		on_delete=models.PROTECT,
@@ -602,6 +770,7 @@ class Booking(models.Model):
 	client_email = models.EmailField(blank=True)
 	client_phone = models.CharField(max_length=40)
 	notes = models.TextField(blank=True)
+	source = models.CharField(max_length=20, choices=SOURCE_CHOICES, default=SOURCE_PUBLIC)
 	created_at = models.DateTimeField(auto_now_add=True)
 
 	class Meta:
@@ -631,6 +800,7 @@ class Booking(models.Model):
 			raise ValidationError('This class has already started and can no longer be booked.')
 
 		current_bookings = self.yoga_class.bookings.exclude(pk=self.pk).count()
+		current_bookings += self.yoga_class.prebooked_reservation_count(exclude_phone=self.client_phone)
 		if current_bookings >= self.yoga_class.capacity:
 			raise ValidationError('This class is already full.')
 

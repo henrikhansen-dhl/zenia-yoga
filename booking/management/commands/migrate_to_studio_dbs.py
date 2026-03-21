@@ -40,7 +40,7 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        from booking.models import Booking, Client, SmsReminderLog, Studio, YogaClass
+        from booking.models import Booking, Client, SeriesPrebookingOptOut, SmsReminderLog, Studio, YogaClass
         from booking.studio_db import provision_studio_database
 
         studio_slug = options.get('studio_slug')
@@ -91,6 +91,13 @@ class Command(BaseCommand):
             _bulk_copy(SeriesThrough, series_rows, alias, self.stdout)
             self.stdout.write(f'  YogaClass.series_participants M2M: {len(series_rows)} rows')
 
+            PrebookedThrough = YogaClass.series_prebooked_participants.through
+            prebooked_rows = list(
+                PrebookedThrough.objects.using('default').filter(yogaclass_id__in=class_ids)
+            )
+            _bulk_copy(PrebookedThrough, prebooked_rows, alias, self.stdout)
+            self.stdout.write(f'  YogaClass.series_prebooked_participants M2M: {len(prebooked_rows)} rows')
+
             # ── M2M: Client.reminder_classes ─────────────────────────────────
             RemindersThrough = Client.reminder_classes.through
             client_ids = list(
@@ -108,6 +115,10 @@ class Command(BaseCommand):
             bookings = list(Booking.objects.using('default').filter(studio=studio))
             _bulk_copy(Booking, bookings, alias, self.stdout)
             self.stdout.write(f'  Booking: {len(bookings)} rows')
+
+            opt_outs = list(SeriesPrebookingOptOut.objects.using('default').filter(studio=studio))
+            _bulk_copy(SeriesPrebookingOptOut, opt_outs, alias, self.stdout)
+            self.stdout.write(f'  SeriesPrebookingOptOut: {len(opt_outs)} rows')
 
             # ── SmsReminderLog ────────────────────────────────────────────────
             logs = list(SmsReminderLog.objects.using('default').filter(studio=studio))
