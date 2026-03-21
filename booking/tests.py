@@ -124,6 +124,12 @@ class BookingFlowTests(TestCase):
 		self.assertContains(response, 'booking-success-title')
 		self.assertContains(response, 'booking-success-text')
 
+	def test_public_class_detail_does_not_render_email_field(self):
+		response = self.client.get(self.class_detail_url)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertNotContains(response, 'name="client_email"', html=False)
+
 	def test_public_unbooking_releases_series_prebooked_seat_and_persists_opt_out(self):
 		participant = Client.objects.create(
 			studio=self.yoga_class.studio,
@@ -526,6 +532,11 @@ class WeeklyRecurrenceTests(TestCase):
 		self.assertEqual(root_class.booked_count, 1)
 		self.assertEqual(root_class.spots_left, 1)
 		self.assertContains(response, '1 / 2')
+		content = response.content.decode('utf-8')
+		self.assertTrue(
+			'reserved from the prebooked list without a booking row yet' in content
+			or 'er reserveret fra listen med forudbookede deltagere uden en konkret bookingrække endnu' in content
+		)
 
 	def test_booking_clean_counts_phone_less_prebooked_seat_toward_capacity(self):
 		now = timezone.now()
@@ -559,6 +570,57 @@ class WeeklyRecurrenceTests(TestCase):
 
 		with self.assertRaises(ValidationError):
 			booking.full_clean()
+
+	def test_prebooked_participants_require_phone_number(self):
+		user = get_user_model().objects.create_user(
+			username='series-prebook-phone-required',
+			email='series-prebook-phone-required@example.com',
+			password='test-pass-123',
+		)
+		StudioMembership.objects.create(
+			studio=self.default_studio,
+			user=user,
+			role=StudioMembership.ROLE_MANAGER,
+		)
+		self.client.force_login(user)
+
+		now = timezone.now()
+		root_class = YogaClass.objects.create(
+			title='Thursday Flow',
+			short_description='Weekly evening yoga.',
+			description='A recurring class.',
+			instructor_name='Zenia',
+			start_time=now + timedelta(days=1),
+			end_time=now + timedelta(days=1, hours=1),
+			capacity=2,
+			is_weekly_recurring=True,
+			is_published=True,
+		)
+		participant = Client.objects.create(
+			studio=root_class.studio,
+			name='Karin',
+			email='karin@example.com',
+			phone='11111111',
+		)
+		Client.objects.filter(pk=participant.pk).update(phone='')
+
+		response = self.client.post(
+			f'/instructor/classes/{root_class.pk}/participants/',
+			data={
+				'participants': [],
+				'prebooked_participants': [participant.pk],
+			},
+			follow=True,
+		)
+
+		self.assertEqual(response.status_code, 200)
+		root_class.refresh_from_db()
+		self.assertEqual(root_class.series_prebooked_participants.count(), 0)
+		content = response.content.decode('utf-8')
+		self.assertTrue(
+			'These prebooked participants are missing a phone number: Karin.' in content
+			or 'Disse forudbookede deltagere mangler telefonnummer: Karin.' in content
+		)
 
 	def test_prebooked_participants_cannot_exceed_capacity(self):
 		user = get_user_model().objects.create_user(

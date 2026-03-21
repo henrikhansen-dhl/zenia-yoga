@@ -479,9 +479,9 @@ class WeeklyParticipantsForm(forms.Form):
             'Prebooked participants'
         )
         self.fields['prebooked_participants'].help_text = (
-            'Disse deltagere får automatisk en plads på de næste ugentlige hold og skal selv afbooke, hvis de ikke kommer.'
+            'Disse deltagere får automatisk en plads på de næste ugentlige hold og skal selv afbooke, hvis de ikke kommer. De skal have et telefonnummer.'
             if is_danish else
-            'These participants automatically keep a seat for the next weekly classes and must unbook if they cannot attend.'
+            'These participants automatically keep a seat for the next weekly classes and must unbook if they cannot attend. They must have a phone number.'
         )
 
     def clean(self):
@@ -493,6 +493,16 @@ class WeeklyParticipantsForm(forms.Form):
                 'En deltager kan kun være på én ugentlig liste ad gangen.'
                 if (get_language() or 'en').startswith('da') else
                 'A client can only be on one weekly list at a time.'
+            )
+        missing_phone_clients = sorted(
+            [participant.name for participant in prebooked_participants if not (participant.phone or '').strip()]
+        )
+        if missing_phone_clients:
+            names = ', '.join(missing_phone_clients)
+            raise forms.ValidationError(
+                f'Disse forudbookede deltagere mangler telefonnummer: {names}. Tilføj et telefonnummer før de kan forudbookes.'
+                if (get_language() or 'en').startswith('da') else
+                f'These prebooked participants are missing a phone number: {names}. Add a phone number before they can be prebooked.'
             )
         if self.capacity is not None and len(prebooked_participants) > self.capacity:
             raise forms.ValidationError(

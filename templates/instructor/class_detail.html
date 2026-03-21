@@ -106,6 +106,19 @@
             {% endif %}
         </p>
 
+        {% if reserved_prebooked_without_booking %}
+        <p class="instr-empty">
+            {% if request.LANGUAGE_CODE == 'da' %}
+            {{ reserved_prebooked_without_booking|length }} plads{{ reserved_prebooked_without_booking|length|pluralize:'' }} er reserveret fra listen med forudbookede deltagere uden en konkret bookingrække endnu.
+            {% else %}
+            {{ reserved_prebooked_without_booking|length }} seat{{ reserved_prebooked_without_booking|length|pluralize }} is reserved from the prebooked list without a booking row yet.
+            {% endif %}
+            {% for participant in reserved_prebooked_without_booking %}
+                {{ participant.name }}{% if not forloop.last %}, {% endif %}
+            {% endfor %}
+        </p>
+        {% endif %}
+
         {% if bookings %}
         <table class="instr-table instr-table-compact">
             <thead>
@@ -202,6 +215,9 @@
                     <div>
                         <strong>{{ participant.name }}</strong>
                         <div class="client-email">{{ participant.email }}</div>
+                        {% if not participant.phone %}
+                        <div class="field-error">{% if request.LANGUAGE_CODE == 'da' %}Mangler telefonnummer. Tilføj det på klienten for at kunne lave en rigtig bookingrække.{% else %}Missing phone number. Add it to the client to create a concrete booking row.{% endif %}</div>
+                        {% endif %}
                     </div>
                     <form method="post" action="{% url 'instructor:class_participant_remove' yoga_class.pk participant.pk %}" class="inline-form">
                         {% csrf_token %}

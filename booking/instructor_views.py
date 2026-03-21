@@ -350,6 +350,7 @@ def class_detail(request, pk):
     root_class.sync_series_prebookings(upcoming_limit=2)
     yoga_class.refresh_from_db()
     bookings = yoga_class.bookings.order_by('created_at')
+    reserved_prebooked_without_booking = yoga_class.prebooked_reservation_clients_without_booking()
     manual_booking_form = BookingForm(yoga_class=yoga_class)
     participants_form = None
     participant_quick_add_form = None
@@ -367,6 +368,7 @@ def class_detail(request, pk):
     context = {
         'yoga_class': yoga_class,
         'bookings': bookings,
+        'reserved_prebooked_without_booking': reserved_prebooked_without_booking,
         'manual_booking_form': manual_booking_form,
         'studio_clients': Client.objects.filter(studio=request.studio).order_by('name').only('name', 'email', 'phone'),
         'participants_form': participants_form,

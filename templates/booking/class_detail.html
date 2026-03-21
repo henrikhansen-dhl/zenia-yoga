@@ -54,15 +54,29 @@
                     <div class="form-errors">{{ form.non_field_errors }}</div>
                 {% endif %}
 
-                {% for field in form %}
-                    <div class="form-row">
-                        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-                        {{ field }}
-                        {% if field.errors %}
-                            <div class="field-error">{{ field.errors|join:', ' }}</div>
-                        {% endif %}
-                    </div>
-                {% endfor %}
+                <div class="form-row">
+                    <label for="{{ form.client_name.id_for_label }}">{{ form.client_name.label }}</label>
+                    {{ form.client_name }}
+                    {% if form.client_name.errors %}
+                        <div class="field-error">{{ form.client_name.errors|join:', ' }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="form-row">
+                    <label for="{{ form.client_phone.id_for_label }}">{{ form.client_phone.label }}</label>
+                    {{ form.client_phone }}
+                    {% if form.client_phone.errors %}
+                        <div class="field-error">{{ form.client_phone.errors|join:', ' }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="form-row">
+                    <label for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>
+                    {{ form.notes }}
+                    {% if form.notes.errors %}
+                        <div class="field-error">{{ form.notes.errors|join:', ' }}</div>
+                    {% endif %}
+                </div>
 
                 <button class="button-primary button-full" type="submit">{% if request.LANGUAGE_CODE == 'da' %}Bekræft booking{% else %}Confirm booking{% endif %}</button>
             </form>

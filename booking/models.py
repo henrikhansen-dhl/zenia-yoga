@@ -380,12 +380,15 @@ class YogaClass(models.Model):
 		return max(self.capacity - self.booked_count, 0)
 
 	def prebooked_reservation_count(self, exclude_phone=None):
+		return len(self.prebooked_reservation_clients_without_booking(exclude_phone=exclude_phone))
+
+	def prebooked_reservation_clients_without_booking(self, exclude_phone=None):
 		if self.is_past:
-			return 0
+			return []
 
 		root = self.recurrence_root
 		if not root.is_weekly_recurring:
-			return 0
+			return []
 
 		excluded_phone = (exclude_phone or '').strip()
 		opted_out_ids = set(self.series_prebooking_opt_outs.values_list('client_id', flat=True))
@@ -395,7 +398,7 @@ class YogaClass(models.Model):
 			if booking.client_phone
 		}
 
-		reserved_count = 0
+		reserved_clients = []
 		for participant in root.series_prebooked_participants.all():
 			if participant.pk in opted_out_ids:
 				continue
@@ -407,9 +410,9 @@ class YogaClass(models.Model):
 			if participant_phone and participant_phone in booked_phone_keys:
 				continue
 
-			reserved_count += 1
+			reserved_clients.append(participant)
 
-		return reserved_count
+		return reserved_clients
 
 	@property
 	def is_past(self):
